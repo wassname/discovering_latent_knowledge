@@ -1,0 +1,8 @@
+datasets
+promptsource
+tqdm
+transformers
+sklearn
+scikit-learn
+accelerate
+bitsandbytes
