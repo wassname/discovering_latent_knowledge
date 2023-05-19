@@ -6,3 +6,9 @@ mamba install -y pytorch torchvision torchaudio pytorch-cuda=11.7 cudatoolkit-de
 mamba install -y ipykernel pip
 pip install -r requirements.txt
 ```
+
+# 2023-05-13 15:17:05
+
+- [x] Convert it to lightning
+- [ ] batch for get hidden states
+  - [ ] and cache
