@@ -11,4 +11,5 @@ pip install -r requirements.txt
 
 - [x] Convert it to lightning
 - [ ] batch for get hidden states
-  - [ ] and cache
+  - [x] and cache
+  - [ ] 9s vs 60. so 10x faster
