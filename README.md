@@ -1,3 +1,13 @@
+My own experiments with DLK
+
+- [x] use pytorch lightning
+- [x] batch hidden states 5x faster
+- [ ] use llama 13B, to see if larger models give better results
+- [ ] eval on some deceptive or misleading statements
+- [ ] debug by looking at model output
+
+-------------
+
 # Discovering Latent Knowledge Without Supervision
 
 This repository contains the essential code for Discovering Latent Knowledge in Language Models Without Supervision.
