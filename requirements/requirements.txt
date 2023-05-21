@@ -1,11 +1,15 @@
 datasets
 promptsource
 tqdm
-transformers
+transformers>=4.29.0
 sklearn
 scikit-learn
 accelerate
 bitsandbytes
 lightning
-peft
 sentencepiece
+# peft
+# use the version that https://github.com/johnsmith0031/alpaca_lora_4bit/blob/main/requirements.txt uses since they always resolve the dependancy issues
+git+https://github.com/huggingface/peft.git@70af02a2bca5a63921790036b2c9430edf4037e2
+# due to a bug we have to downgrade to this one for now https://twitter.com/Teknium1/status/1660003439752138752
+bitsandbytes==0.37.2

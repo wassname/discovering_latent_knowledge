@@ -1,10 +1,8 @@
 name: dlk2
 channels:
   - conda-forge
-  - pytorch
 dependencies:
   - python=3.9
-  - ipykernel
   - pytorch
   - torchvision
   - torchaudio
@@ -13,6 +11,4 @@ dependencies:
   - cudatoolkit=11.7
   - ca-certificates
   - openssl
-  - conda-lock
-  - certifi
-prefix: /home/wassname/miniforge3/envs/dlk2
+prefix: /home/ubuntu/mambaforge/envs/dlk2
