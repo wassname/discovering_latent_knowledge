@@ -4,7 +4,7 @@
 set -e -x
 PROJECT_NAME=dlk2
 echo $PROJECT_NAME
-PYTHON_INTERPRETER=~/miniforge3/envs/$PROJECT_NAME/bin/python
+PYTHON_INTERPRETER=~/mambaforge/envs/$PROJECT_NAME/bin/python
 # minimal requirement, simpler, but no versions or pip
 conda env export --no-builds --from-history > requirements/environment.min.yaml
 # extensive requirements including pip and information overload
