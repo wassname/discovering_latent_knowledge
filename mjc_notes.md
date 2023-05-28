@@ -52,3 +52,14 @@ but we would rather know if the generated thing is true, from the mind of the on
 so that means we actually need the hidden states DURING GENERATION!
 
 now generation is slow. so we should make it generate just a y/n.
+
+
+# 2023-05-28 10:12:54
+
+I need a model that will lie to me for the test set?... they are not very consistent. 
+
+Maybe with
+- better search
+- manual pruning of generations?
+
+I guess this shows they they trained whether the text it read is true... because that's much simpler
