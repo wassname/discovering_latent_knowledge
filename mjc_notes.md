@@ -63,3 +63,9 @@ Maybe with
 - manual pruning of generations?
 
 I guess this shows they they trained whether the text it read is true... because that's much simpler
+
+
+# 2023-05-28 16:46:38
+
+bug: so there are two no tokens... wtf
+the model only uses one! wtf!
