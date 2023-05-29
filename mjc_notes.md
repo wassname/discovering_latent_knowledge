@@ -85,3 +85,5 @@ Q for elk
 
 Note we are using normalized for sklearn and it seems easy?
 but unnorm for CCS, hmm
+
+I can't get it to reliably lie, even at 30B. Grrr. Maybe an unaligned model?
