@@ -69,3 +69,19 @@ I guess this shows they they trained whether the text it read is true... because
 
 bug: so there are two no tokens... wtf
 the model only uses one! wtf!
+
+oh it's _No vs No. One is the start of a new word. E.g. " No" and "\nNo" are _No. But "No" is "No"
+
+
+Q for elk
+- why int16 quant of hidden states? oh for the datasets package! I see https://github.com/EleutherAI/elk/issues/208
+- why use forward not generate?
+  - forward is what it thought of the last token?
+  - generate is what it thinks of the generated tokens, conditional on what it read. 
+- The later seems much closer to mind reading, and much closer to what we want
+- additionally I've made this change in a PR and get X results
+
+# 2023-05-29 07:09:38
+
+Note we are using normalized for sklearn and it seems easy?
+but unnorm for CCS, hmm
