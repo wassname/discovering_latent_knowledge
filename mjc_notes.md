@@ -87,3 +87,12 @@ Note we are using normalized for sklearn and it seems easy?
 but unnorm for CCS, hmm
 
 I can't get it to reliably lie, even at 30B. Grrr. Maybe an unaligned model?
+
+OK so I asked on discord
+- why not use generate? A: too hard, and how to make sure it's an answer (solution is to use relative probs and a single work). So they just haven't gone there.
+- and how to make it lie. one person used yes momentum, nad it worked for them.
+
+I would like to try:
+- [ ] lying larry. with a larry prompt. and larry response.
+- [ ] I could also keep sampling untill I get the prob diff I want! :)
+  - the second actually seems better. since it can make sure that the pairs are the same except the answer!!
