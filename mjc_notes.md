@@ -96,3 +96,69 @@ I would like to try:
 - [ ] lying larry. with a larry prompt. and larry response.
 - [ ] I could also keep sampling untill I get the prob diff I want! :)
   - the second actually seems better. since it can make sure that the pairs are the same except the answer!!
+
+
+so wait
+- how often are the pairs opposite answers? :(
+
+So with the tuples:
+- sometimes both are the same, making one a lie
+- sometimes they are contrasting
+
+So I could collect...
+- valid contrasting answer? ... this seem inelegant as I've got no garuntees how long it will take
+- find some way to generate random inference hidden states... so far it seem deterministic... maybe use mc dropout!!
+
+
+OK I'm trying to find a model with dropout... most of them dont
+- llama no
+- opeansssistant no
+- redpyjamas? no
+- falcan? YES has dropout
+- "stabilityai/stablelm-tuned-alpha-7b" YES
+- [pythia](https://huggingface.co/OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5)
+- dolly
+  - but it looks like most of them are usingt an attention path that bypasses
+
+worst case I can use that momentum. I'm still judging it on it's answer. It's just that I really want it to know it's lying.
+
+side note: popular large models like LLaMA, Gopher, Chinchilla, GPT-3, and PaLM did not use dropout, since it can slow down learning.
+
+- "stabilityai/stablelm-tuned-alpha-7b" # has dropout
+
+# 2023-06-08 07:20:48
+
+Goal: get it lie, knowing it can lie
+Extra: get contrastive pairs
+
+TODO:
+- try monte carlo dropout?
+  - get stablm working
+    - need proper prompting?
+    - then add dropout, and see if that helps with pairs..
+    - (or maybe add noise? augmentation?)
+- [ ] use talk to llm model cards
+- [ ] just use forward...
+- [ ] get some stats on yes, no, lie yes, lie no...
+- [ ] find a way to randomize
+
+How does generation work anyway? [so](https://github.com/huggingface/transformers/blob/ba695c1efd55091e394eb59c90fb33ac3f9f0d41/src/transformers/generation/utils.py#L2338) it looks like it's just a forward. where `next_token_logits = outputs.logits[:, -1, :]`. Where logits are from `lm_logits = self.lm_head(hidden_states)`
+
+Note default logits_processor is LogitsProcessorList([]) where it doesn't do anything as it's empty
+
+
+So how do a I turn a forward into the next token....
+- I go `outputs.logits[:, -1, :].softmax(-1).argmax(-1)`
+
+
+```
+model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
+outputs = model(**model_inputs, return_dict=True)
+next_token_logits = outputs.logits[:, -1, :]
+next_tokens_scores = logits_processor(input_ids, next_token_logits)
+next_tokens = torch.argmax(next_tokens_scores, dim=-1)
+```
+
+OK so know I know that greedy 1 token generation IS the same as forward. BUT I still have the same problem. Am I seperating the model acting on a lie, or **knowingly generating a lie with high prob?**
+
+:bug: why does mcdropout not work!?! Why is it deterministic? Can I inject noise?
