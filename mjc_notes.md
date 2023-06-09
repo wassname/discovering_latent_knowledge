@@ -114,11 +114,12 @@ OK I'm trying to find a model with dropout... most of them dont
 - llama no
 - opeansssistant no
 - redpyjamas? no
-- falcan? YES has dropout
-- "stabilityai/stablelm-tuned-alpha-7b" YES
-- [pythia](https://huggingface.co/OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5)
-- dolly
-  - but it looks like most of them are usingt an attention path that bypasses
+- falcan? has dropout but no effect
+- "stabilityai/stablelm-tuned-alpha-7b" has dropout but no effect
+- [pythia](https://huggingface.co/OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5). has dropout but no effect
+- dolly: has dropout but no effect
+- 
+**but it looks like most of them are usingt an attention path that bypasses**
 
 worst case I can use that momentum. I'm still judging it on it's answer. It's just that I really want it to know it's lying.
 
