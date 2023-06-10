@@ -163,3 +163,19 @@ next_tokens = torch.argmax(next_tokens_scores, dim=-1)
 OK so know I know that greedy 1 token generation IS the same as forward. BUT I still have the same problem. Am I seperating the model acting on a lie, or **knowingly generating a lie with high prob?**
 
 :bug: why does mcdropout not work!?! Why is it deterministic? Can I inject noise?
+
+
+Hmm base models seem better, since they are not trained for honesty!
+
+
+
+So maybe I should see IF I can get many shot, acc=0.9 without lies. Then I can add lies.
+
+
+stylaised knowledge:
+- the prompt matters
+- I don't know if the size of the model matters
+- I don't know if the type of model matters
+
+
+How to get the prompt? more direct. Just a lying one. Just a true one.
