@@ -183,3 +183,10 @@ How to get the prompt? more direct. Just a lying one. Just a true one.
 
 Maybe just try:
 "The following movie review expresses what sentiment?" just like in ELK and lillian wangs...
+
+
+BUG FIXME... I was returning the answers for the last shot... so totally random, jeeze
+
+# 2023-06-10 18:01:30
+
+It seems to be working now... but there is data leakage, where the midn read know more than the model.... so it's not using the models knowledge... it's cheating

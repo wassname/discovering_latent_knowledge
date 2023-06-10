@@ -3,6 +3,7 @@ import os
 os.environ['CUDA_VISIBLE_DEVICES']="-1"
 import torch
 import argparse
+import pandas as pd
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from huggingface_hub.constants import HUGGINGFACE_HUB_CACHE
 from pathlib import Path
@@ -29,16 +30,29 @@ def main(model_repo, lora_repo = None, **download_options):
             **download_options
         )
 
+def sizeof_fmt(num, suffix="B"):
+    for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:
+        if abs(num) < 1024.0:
+            return f"{num:3.1f}{unit}{suffix}"
+        num /= 1024.0
+    return f"{num:.1f}Yi{suffix}"
 
 
+def dir_size(p: Path) -> int:
+    return sum(f.stat().st_size for f in p.glob('**/*') if f.is_file())
 
 if __name__=="__main__":
     
-    files = [f.relative_to(HUGGINGFACE_HUB_CACHE) for f in Path(HUGGINGFACE_HUB_CACHE).glob('models--*')]
-    files = "\n".join(sorted([str(f).replace('--', '/') for f in files]))
-    print(HUGGINGFACE_HUB_CACHE)
-    print("Downloaded models:\n", files)
-    1/0
+    # Report already downloaded models in a dataframe
+    files = [dict(
+        name=str(f.relative_to(HUGGINGFACE_HUB_CACHE)).replace('models--', '').replace('--', '/'),
+        dir_size=sizeof_fmt(dir_size(f)),
+        ctime=f.stat().st_ctime
+        ) for f in Path(HUGGINGFACE_HUB_CACHE).glob('models--*')]
+    df_files = pd.DataFrame(files).sort_values('ctime')
+    df_files['ctime'] = pd.to_datetime(df_files['ctime'], unit='s').round('1T')
+    print('models found in ', HUGGINGFACE_HUB_CACHE)
+    print(df_files)
     
     parser = argparse.ArgumentParser()
     parser.add_argument('model_repo', type=str)
