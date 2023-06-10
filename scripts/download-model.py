@@ -4,6 +4,8 @@ os.environ['CUDA_VISIBLE_DEVICES']="-1"
 import torch
 import argparse
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from huggingface_hub.constants import HUGGINGFACE_HUB_CACHE
+from pathlib import Path
 
 model_options = dict(
     device_map="auto", 
@@ -31,6 +33,13 @@ def main(model_repo, lora_repo = None, **download_options):
 
 
 if __name__=="__main__":
+    
+    files = [f.relative_to(HUGGINGFACE_HUB_CACHE) for f in Path(HUGGINGFACE_HUB_CACHE).glob('models--*')]
+    files = "\n".join(sorted([str(f).replace('--', '/') for f in files]))
+    print(HUGGINGFACE_HUB_CACHE)
+    print("Downloaded models:\n", files)
+    1/0
+    
     parser = argparse.ArgumentParser()
     parser.add_argument('model_repo', type=str)
     parser.add_argument('-l', '--lora_repo', type=str, default=None, help='Name of the lora repo')

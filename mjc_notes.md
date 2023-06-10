@@ -179,3 +179,7 @@ stylaised knowledge:
 
 
 How to get the prompt? more direct. Just a lying one. Just a true one.
+
+
+Maybe just try:
+"The following movie review expresses what sentiment?" just like in ELK and lillian wangs...
