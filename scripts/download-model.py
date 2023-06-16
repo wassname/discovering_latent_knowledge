@@ -58,7 +58,7 @@ if __name__=="__main__":
     parser.add_argument('model_repo', type=str)
     parser.add_argument('-l', '--lora_repo', type=str, default=None, help='Name of the lora repo')
     parser.add_argument('-f', '--force_download', type=str, default=None, help='Name of the lora repo')
-    parser.add_argument('-r', '--resume_download', type=str, default=None, help='Name of the lora repo')
+    parser.add_argument('-r', '--resume_download', action='store_true', help='Name of the lora repo')
     args = parser.parse_args()
     
     main(args.model_repo, args.lora_repo, force_download=args.force_download, resume_download=args.resume_download, low_cpu_mem_usage=True)
