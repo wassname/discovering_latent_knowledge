@@ -110,15 +110,20 @@ So I could collect...
 - find some way to generate random inference hidden states... so far it seem deterministic... maybe use mc dropout!!
 
 
-OK I'm trying to find a model with dropout... most of them dont
+# OK I'm trying to find a model with dropout... most of them dont
+
+note that you can check in the model config
+
 - llama no
 - opeansssistant no
 - redpyjamas? no
 - falcan? has dropout but no effect
 - "stabilityai/stablelm-tuned-alpha-7b" has dropout but no effect
 - [pythia](https://huggingface.co/OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5). has dropout but no effect
-- dolly: has dropout but no effect
-- 
+- dolly: has dropout but no effect... wait no dropout in config
+- [MPT](https://huggingface.co/mosaicml/mpt-7b/blob/main/config.json):
+
+
 **but it looks like most of them are usingt an attention path that bypasses**
 
 worst case I can use that momentum. I'm still judging it on it's answer. It's just that I really want it to know it's lying.
@@ -253,10 +258,7 @@ Why does dropout not work? It's in the training of models and of lora... yet it 
 
 e.g. https://huggingface.co/OpenAssistant/falcon-7b-sft-top1-696
 
-oh maybe it's the 4 or 8bit...
-
-
-so it looks like the attention it uses... bypasses dropout unless albi is present 
+So now I need to get a falcan model to work reliably... or maybe I should change to pythia or dolly
 
 # How to enable dropout in language models?
 
@@ -275,3 +277,78 @@ model = PeftModel.from_pretrained(
 ```
 - turn of cache `model.forward(input_ids use_cache=False)`
 - possibly avoid 4bit and 8bit?
+
+# 2023-06-11 20:07:48
+
+So now I need to get a falcan model to work reliably... or maybe I should change to pythia or dolly. As long as it has dropout
+
+Also I need to try the starcoder model
+
+OK I got MCdropout working. Negative results. I can't predict the truth from that.... weird.
+
+No... it just give bad answrs
+
+
+learning
+- wizard coder works well for getting sentiment :)
+- but as far a detection lies from mcdropout... no!
+
+
+exp
+- ~~what if, I use attention? well it's per token.. which isn't what we can use~~
+- [x] what about a large N? yes it seems to help!
+- [ ] what about I don't use 4bit? will that help
+- [ ] scaling..
+- [ ] but it all in datamodule?
+- [ ] Now that it works, maybe try a probe?!?
+
+
+https://github.com/wassname/discovering_latent_knowledge/blob/main/notebooks/004_mjc_CCS_v2.ipynb
+
+# 2023-06-17 11:10:15
+
+How do we arrange this. In the original CCS
+- two groups, ones ask if it's positive, the other negative. each has a random actual label.
+
+In mine:
+- pairs: each one is randomly dropped out so they are separated in some latent space. there is a true label y. And each one in the pair, one is closer to the truth, the other further.
+
+So each try to divine the true y from the hidden states
+
+So I could arrange it... work out which one has the high probability of truth and order. Nah
+
+So my choices for y: 
+- I can try and detect the true answer from hidden states: this is what CCS does, I use the true answer as y
+- Or try and detect deception: I use true_answer===given_answer? but then what about unintentional lies? ~10 of the time.
+
+
+
+The first one is more universally useful.
+
+
+In the CCS paper the model doesn't know which group is which in a given batch. But it must distinguish between them as best it can.
+
+This wont work for me as mine as they are not separated into two groups. They are instead separated by some magnitude (p1-p2) and some direction/ranking. 
+
+So instead we can try and prediction the magnitude (unsupervised), or the direction (unsupervised), or both (I guess this is supervised).
+
+
+## So wait what is my setup:
+
+- given a model which has dropout enabled
+- (we do greedy generation of a single token. the prompt asks for a binary answer)
+- we do two inferences on the same inputs. Since we have dropout enabled, even during inference, we get two slightly different hidden states `hs1` and `hs2`, and two slightly different probabilities on our yes and no output tokens `p1` `p2`. We also have the true answer `y`
+- so given this pair of hidden states `hs1` and `hs2`, we want to know which one is more true. We know that the one which gives the highest probability of `y` is the ground truth.
+
+So we can set this up in many ways
+
+- the input is a vector, expressing the difference between the pair `model(hs1-hs2)==(p1-p2)*y`. And we want to work out which direction is closer to the truth.
+- `model(hs1)-model(hs2)=(p1-p2)*y` where the model just takes in a single hs and we rank the outputs. This is like in CCS with it's unsupervised ranked losses.
+
+Can we predict deception? No, because the pair are both either deception or not. But we can predict private truth, and compare to public statement. Half our data is deceptive to we can test on deception in this manner.
+
+
+spel wrongg test here.
+
+ d "frenc" "test" hmm Polski
+  
