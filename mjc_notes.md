@@ -352,3 +352,17 @@ spel wrongg test here.
 
  d "frenc" "test" hmm Polski
   
+
+# how does the loss from CCS work?
+
+https://arxiv.org/pdf/2212.03827.pdf
+
+-  First, we use the fact that a statement and its negation should have probabilities that add up to 1
+-  However, this objective alone has a degenerate solution: p(x+) = p(x−) = 0.5. To avoid this problem, we encourage the model to also be confident with the following confidence lo
+
+# so what loss can I use
+
+- supervised
+- ranking. here I do MCDropout 3 times. Then I try to rank them. There should be two similar and 2 differen't. 
+  - 1 could be a lie
+  - 2 could be truth?
