@@ -1,7 +1,6 @@
 lightning_logs/
 .pkl_cache/
-
-
+.ds/
 
 # Distribution / packaging
 .Python

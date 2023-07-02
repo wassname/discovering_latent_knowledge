@@ -366,3 +366,16 @@ https://arxiv.org/pdf/2212.03827.pdf
 - ranking. here I do MCDropout 3 times. Then I try to rank them. There should be two similar and 2 differen't. 
   - 1 could be a lie
   - 2 could be truth?
+
+
+exp:
+- [ ] try getting dual notebook working
+  - [x] first recache the dataset
+  - [ ] note dual means we pass both x0 and x1 into the model. rather than i9ndependant passes
+
+BUGS:
+- [ ] metrics: acc is averaged over epochs, change to auroc and make per val train
+- [ ] it's overfitting. maybe removing first and last layers?
+- [x] 017 mjc getting hidden layers doesn't work anymore?
+  - [x] fix caching. ah it was just a bad test for difference fixed
+- [ ] memory leak now... it just goes up...
