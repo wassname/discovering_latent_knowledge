@@ -379,3 +379,12 @@ BUGS:
 - [x] 017 mjc getting hidden layers doesn't work anymore?
   - [x] fix caching. ah it was just a bad test for difference fixed
 - [ ] memory leak now... it just goes up...
+
+
+# 2023-07-06 14:38:18
+
+How general is it?
+- does it work across tasks?
+- across prompts?
+- 
+Oh no... the lies are far apart... maybe I should normalise the distance!
