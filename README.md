@@ -2,9 +2,19 @@ My own experiments with DLK
 
 - [x] use pytorch lightning
 - [x] batch hidden states 5x faster
-- [ ] use llama 13B, to see if larger models give better results
-- [ ] eval on some deceptive or misleading statements
+- [x] use wizcoer 15B, to see if larger models give better results
+- [x] eval on some deceptive or misleading statements
 - [ ] debug by looking at model output
+- [ ] test generalization
+- [ ] try differen't approaches
+  - [ ] setup
+    - [ ] detect deception vs truth
+    - [ ] differen't prompts
+    - [ ] differen't tasks
+  - [ ] model arch
+    - [ ] put in both states
+    - [ ] normalize states
+    - [ ] mix states at end
 
 -------------
 

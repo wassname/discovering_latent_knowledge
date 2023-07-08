@@ -387,4 +387,91 @@ How general is it?
 - does it work across tasks?
 - across prompts?
 - 
-Oh no... the lies are far apart... maybe I should normalise the distance!
+Oh no... the lies are far apart... maybe I should normalise the distance! No it's fine
+
+
+Oh wait... it's not lying! bloody hell!
+How can I make it lie?
+
+# I need a model that will lie
+
+Styalized facts about getting a model to lie:
+- a logic model is better, for example a coding model
+- a larger model might help
+- an uncensored model will help a lot
+- a good jailbroken prompt will help a lot
+
+
+Experiment, try varius uncensored model. Mix of coding, larger, etc.
+Run with N=100 and seeb if they lie...
+
+- "tiiuae/falcon-7b": dropout doesn't do anything, it must not be hooked up
+- "ehartford/WizardLM-Uncensored-Falcon-7b": dropout doesn't seem to do anything here either
+- "WizardLM/WizardCoder-15B-V1.0": lies 11 or 7% (unambig) of the time
+- ~~TheBloke/Wizard-Vicuna-13B-Uncensored no dropout~~
+- "openaccess-ai-collective/minotaur-15b" from 7->6% unambig lies. and 11%->8 ambig. meh
+- **"HuggingFaceH4/starchat-beta"** this is uncensored!
+  - 11%->22% ambig lies, 8->16% unambig lie !!
+- "starcoderplus: 14% and 11%
+- bigcode/starcoderbase this is a base model
+
+
+| repo                                    | ambigious lies % | unambig lies% | comment    |
+| --------------------------------------- | ---------------- | ------------- | ---------- |
+| tiiuae/falcon-7b                        | -                | -             | no dropout |
+| ehartford/WizardLM-Uncensored-Falcon-7b | -                |               | no dropout |
+| TheBloke/Wizard-Vicuna-13B-Uncensored   | 11               | 7             | no dropout |
+| WizardLM/WizardCoder-15B-V1.0           | 11               | 7             |            |
+| openaccess-ai-collective/minotaur-15b   | 8                | 6             |            |
+| **HuggingFaceH4/starchat-beta**         | 22               | 16            |            |
+| starcoderbase                           | 14               | 11            |            |
+| starcoderplus                           | 12               | 7             |            |
+
+
+note that starcoderbase was 11 and 7% for n=600
+and h4 starchat beta was 20 and 16%!
+
+python scripts/download-model.py  -r "openaccess-ai-collective/minotaur-15b"
+python scripts/download-model.py  -r "bigcode/starcoderbase"
+
+# I need a prompt that will lie
+changing it to stay in charector got 11% and 7% which is better
+
+
+# datasets changes
+
+- [ ] bug where it tries to pickle arguments
+- [ ] it can't save half.... elk uses int6...
+
+
+why do I ahve a problem with pickle bfloat....
+oh as it's adding the mode
+from the create_builder_config! how to prevent this?
+
+
+
+- from_generator
+- create_config_id https://github.com/huggingface/datasets/blob/main/src/datasets/builder.py#L198
+  - from https://github.com/huggingface/datasets/blob/main/src/datasets/builder.py#L537
+  - https://github.com/huggingface/datasets/blob/main/src/datasets/builder.py#L365
+  - .
+  - https://github.com/huggingface/datasets/blob/3e34d06d746688dd5d26e4c85517b7e1a2f361ca/src/datasets/iterable_dataset.py#L1405 so no kwargs get passed in
+  - but features, and data_files and data_dir added?
+
+```py
+builder = Generator(
+  # config_name=None,
+  # hash=None,
+        # cache_dir=None,
+        features=features,
+        generator=generator,
+        gen_kwargs=gen_kwargs,
+        # **kwargs,
+    )
+# https://github.com/huggingface/datasets/blob/3e34d06d746688dd5d26e4c85517b7e1a2f361ca/src/datasets/builder.py#L657
+builder.download_and_prepare(
+)
+dataset = builder.as_dataset(
+    split="train", verification_mode=None, in_memory=False
+)
+```
