@@ -475,3 +475,55 @@ dataset = builder.as_dataset(
     split="train", verification_mode=None, in_memory=False
 )
 ```
+
+# whats my task
+
+have the weights been permuted in the direction of....
+
+- inner truth - balanced, always available, but not quite what we care about
+- inner falsehood
+- deception - 
+  - when the model is told to lie, and it lies
+  - or it could be, when the model can answer, but doesn't (this requires differen't data prep....), and takes 2x as long
+  - although here there are 3 possiblilities
+    - mistaken
+    - lying
+    - truth
+
+are we asking CHOICE TODO
+- for hs1 is it deceiving?
+- or is hs1-hs2 in the direction of deception?
+
+
+Maybe I should
+- do a lie and non lie prompt.
+- have classes [true, mistake, lie]
+
+TODO CHOICE
+
+|       | knows   | unkown |
+| ----- | ------- | ------ |
+| right | correct | luck   |
+| wrong | lie     | wrong  |
+
+
+# what do I care about?
+
+the truth or deception? deception.
+
+and generalisation.
+
+I can hone in as much as I can
+
+So train for deception as closely as possible.
+
+If I use all 4 classes I can say which answer is closer to correct, luck, lie, wrong.. it sounds like a fascinating thing if it works!
+
+
+# 2023-07-09 08:14:22
+
+OK so I tried to do it with 3 type of prompt: lie, true and simple. The simple one was meant to measure the model capacity to do the task... but it was really low. Wat?!
+
+
+Oh it was because I asked it to say negative, but it REALLY wanted to say Negative. OK. 
+So measuring a simple prompt: 95%, and measuring the complex true prompt: 94%, so not worth the 2x slowdown.
