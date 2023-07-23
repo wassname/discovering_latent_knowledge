@@ -1,6 +1,7 @@
 lightning_logs/
 .pkl_cache/
 .ds/
+/notebooks/old/
 
 # Distribution / packaging
 .Python

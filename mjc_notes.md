@@ -527,3 +527,177 @@ OK so I tried to do it with 3 type of prompt: lie, true and simple. The simple o
 
 Oh it was because I asked it to say negative, but it REALLY wanted to say Negative. OK. 
 So measuring a simple prompt: 95%, and measuring the complex true prompt: 94%, so not worth the 2x slowdown.
+****
+# 2023-07-13 18:21:20
+
+- [ ] do the triple label experiment
+- [ ] do mc ranking for deception?
+
+Where were we? Oh I now have paired lie and no lie. The no lie is 94% so it should give us some idea of when it knows it.
+
+Now I can try that 4 class one. Actually I will merge the two unknown classes as we do not have the information to **distinguish**
+
+
+|       | knows   | unknown |
+| ----- | ------- | ------- |
+| right | correct | unknown |
+| wrong | lie     | unknown |
+
+
+And in terms of putting them into the model. Do I want 
+- MC ranking: model(x)>model(y)
+  - this is really ranking loss, and I can use montecarlo dropouts
+- model(x, y)>0, which seems to work better but might it be cheating?
+- model(x)=class? 
+  - which is the simplest. 
+  - I'm really saying, given these hidden states is the model going to be
+    - unsure
+      - I can get this for when I know it's wrong. That means internal and external uncertainty, but the model can probobly only do internal
+      - Or I could use something like MCDropout but then we have further subclasses
+        - unconfident wrong
+        - unconfident right
+        - confident wrong
+    - deceptive
+    - sure
+  - or
+    - truth
+    - lie
+    - unsure/mistake/random
+- 
+
+
+I could do just the ones where it is given examples lie? but sometimes it does and sometimes it doesn't
+
+
+# exp 3 classes: truth, deception, unkown. lie only 
+
+Results:
+- 37% f1 deception detection on weight cross entropy loss
+
+	precision	recall	f1-score	support
+truth	0.873932	0.976911	0.922556	3768.000000
+deception	0.493878	0.297297	0.371166	407.000000
+unkown	0.558140	0.073846	0.130435	325.000000
+accuracy	0.850222	0.850222	0.850222	0.850222
+macro avg	0.641983	0.449351	0.474719	4500.000000
+weighted avg	0.816751	0.850222	0.815477	4500.000000
+
+
+# exp 2 classes. lie only 
+
+notebooks/018_mjc_2cls.ipynb
+
+Hmm maybe I should make a deception vs not class? 44% f1 score
+
+
+# experiment mc dropout, ranking?
+
+Can I use a ranking loss?
+
+" Ranking Losses is to predict relative distances between inputs. This task if often called metric learning."
+
+usuall you input a similar and disimilar pair. So in that case I don't have that data.
+But I do have 2 and I know the direciton
+
+
+We could have true>unsure>lie
+
+
+We could use https://pytorch.org/docs/stable/generated/torch.nn.MarginRankingLoss.html#torch.nn.MarginRankingLoss with -1 and 1 losses
+
+
+
+Tasks
+
+| type    | max auc_roc |
+| ------- | ----------- |
+| ranking | 82%         |
+| cls_2   | 80%         |
+| cls_3   |             |
+| mse     | 74%         |
+
+
+- exp: OK so if we use ranking ~30%... no 82
+- exp: if we use distance, and mse or smoothl1loss then we do a bit better ~50% notebooks/019_mjc_ranking_distance.ipynb
+  - and with better hparams we get 86%!
+  - this kind of makes sense? now what if we normalize? 65% notebooks/019_mjc_distance_mse_norm.ipynb
+  - subtract and norm? 72% notebooks/019_mjc_distance_mse_subt_norm.ipynb
+- exp: what about just classify direction? 66% 
+- OH it turn out the loss curve is weird, as the modedl si too small...
+
+- [ ] Not very good? What if we normalize the hidden states in one of a few ways
+  - [ ] each neurons
+  - [ ] the total magnitude
+
+ideas:
+- normalize
+- only wory about direction, nothing else. so it's a class
+- actually remove the 4% of confusion, it might significantly overlap with the 10% of lies!... but oh wait we are looking at direction right now
+- for that matter we have ans1 and ans2 and one might be a lie and one migth not in another ~4% of cases
+- maybe I should dropout the first few layers and measure the next?
+- hs1-hs2
+
+# 2023-07-20 08:53:24
+
+I would like a better score than 82% but when independant models are getting similar rates then meh.
+
+- [ ] Exp: clean data, more data
+  - [x] Only the ones where it knows the answer
+  - [x] Only the ones with significant permuations
+  - [x] More data (using map to transform)
+  - [ ] results...?... it's broken lol
+- Exp: test generalization other prompts
+  - what's the accuracy with multiple dropouts? does it help?
+
+150*6
+
+Oh when I limited it to answers that moved by more than 5%, it did poorly
+maybe if I divide by that?
+
+
+what about `(hs1-hs2)/dProb`? And then cls direction?
+
+
+Ah found the bug! I shuffled the dataset for X, but then drew y from the unshuffled lol! FML
+
+:poop: :poop: :poop: 
+
+
+Hmm so a linear model gets 70%, and all my models get only 73% lol. This is with all "accident" rows removed...
+
+So what next? A differen't way o toiew the data?
+
+Oh I can rerun my norm ones..
+
+
+# 2023-07-21 21:44:17
+
+Good result. notebooks/020_mjc_ranking_loss_w_scaling_big_moves_94% copy.ipynb
+
+Here is get 71% with a linear prob. But 89% with a ranking loss model!
+
+I might be able to restrict it to large dprobs and tune to get an even better result!
+
+Perhaps I can do linear probes on a subset to explore some dims?
+
+:notebook: ranking loss performs better, learning more, managing deeper networks, not overfitting.
+
+This makes sense for several reasons:
+- the network has no realitive information it can use to overfit
+- it has absolute information on activations, which may be importanst as it's operating on a multidimensional optimisation surface, where absolute position may give important informaiton. As an analogy imagine you are on a gold course, which is more usefull, knowledge that two balls are 2 meters apart and a 30deg incline. Or that that 2 meters is between the top of a small hill and the other a sandpit, with the 30 deg incline between them. Absolute information seems important!
+
+
+exp
+- [ ] how does a change in min dDrop change things? maybe with lienar
+- [ ] use UQA dataset... oh wait that's a type of dataset, and am odel
+- [ ] does result generalzie between datasets?
+- [ ] can I get above 89% with hyperopt?
+- [ ] can I get above 89% with mcdropout?
+- [ ] Triplet loss? I just need to make more mcdropouts
+
+
+TODO
+- test with diff prompt e.g please lie, e.g. please tell truth, e.g. give random answer
+  - can we do this interactivly? or a very small dataset with random prompt the model comes up with?
+- test with truthfullqa https://huggingface.co/datasets/EleutherAI/truthful_qa_binary
+  - maybe generate dataset?
