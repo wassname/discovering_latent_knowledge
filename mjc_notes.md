@@ -688,12 +688,23 @@ This makes sense for several reasons:
 
 
 exp
-- [ ] how does a change in min dDrop change things? maybe with lienar
-- [ ] use UQA dataset... oh wait that's a type of dataset, and am odel
-- [ ] does result generalzie between datasets?
-- [ ] can I get above 89% with hyperopt?
-- [ ] can I get above 89% with mcdropout?
-- [ ] Triplet loss? I just need to make more mcdropouts
+- opt
+  - [ ] can I get above 89% with hyperopt?
+  - [ ] can I get above 89% with test time mcdropout?
+  - [ ] how does a change in min dDrop change things? maybe with lienar
+- [ ] obj
+  - [x] Triplet loss? I just need to make more mcdropouts
+    - So I move B close to A and C far from A. 
+    - So I would need a mcdropout that did not move it far
+    - And another that did
+    - nah it doesn't make sense, as I havet exact distances
+  - Modify Margin Ranking Loss to have softlabel? or is it jsut mse?
+  - [ ] try margin=0.2
+  - [ ] try just mse distance... wait mse makes distance not matter... no
+    - [ ] YES! 95% auc. 90% acc and more stable :)
+- [ ] ds
+  - [ ] prompts
+  - [ ] does result generalzie between datasets? truthfull qa
 
 
 TODO
@@ -701,3 +712,56 @@ TODO
   - can we do this interactivly? or a very small dataset with random prompt the model comes up with?
 - test with truthfullqa https://huggingface.co/datasets/EleutherAI/truthful_qa_binary
   - maybe generate dataset?
+
+
+
+# loss
+
+OK if I modify the margin loss.... 
+- right now it says if the direction is right then 0 loss, but if the direction wrong then punish dependong on far away
+- [x] margin says that it has to be at least this far in the right direction! (try this)
+
+
+- If I want to say if should be this far away. don't use mse as I want direction!
+- MAE.. no
+- just distance? yes!
+
+
+- a different activation I don't care
+- what about
+
+
+idea:
+- what if we don't flatten layer but conv over them?
+- what if we embed position!
+
+exp
+- nb: try to grok with high weight decay sicne with margin it seems more stable...
+- emb: try conv.. wIP
+- no true switch... wait why did I switch it.. .weight
+- wait what 93% baseline wat?? oh wait we are just detecting the word positive lol! ignore this
+
+# 2023-07-23 19:50:10
+
+Where was I?
+- 03_ds_TQA: trying to make a new OOS dataset
+- 023 I got up to 90% acc and 96% roc_auc
+
+
+03_ds_TQA... make sure 
+- [ ] true false is rigth, 
+- [ ] acc
+
+
+TruthfullQA:
+- make sure it can get it right
+
+
+- [ ] OK maybe my own curated set?
+- [ ] Or just make a quick one to test manually...
+
+- [ ] move common functs to src
+  - [ ] probe
+  - [ ] load model
+  - [ ] get_hidden_states
+  - [ ] get_choices_as_tokens
