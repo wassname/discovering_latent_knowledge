@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 import lightning as pl
 import pandas as pd
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, TensorDataset
 from src.datasets.load import ds2df
 
 def make_y(df):
     # label: is ans2 more true than ans1
-    # so we ask does ans2 have greater probabiliy on "positive" than ans1
+    # so we ask does ans2 have greater probability on "positive" than ans1
     # then, when the right answer is negative we swap the sign
     true_switch_sign = df.true_answer*2-1
     distance = (df.ans2-df.ans1) * true_switch_sign

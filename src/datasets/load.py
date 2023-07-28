@@ -1,3 +1,6 @@
+import numpy as np
+import pandas as pd
+
 def rows_item(row):
     """
     transform a row by turning singe dim arrays into items

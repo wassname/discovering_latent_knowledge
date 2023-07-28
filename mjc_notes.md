@@ -749,7 +749,7 @@ Where was I?
 
 
 03_ds_TQA... make sure 
-- [ ] true false is rigth, 
+- [ ] true false is right, 
 - [ ] acc
 
 
@@ -760,8 +760,11 @@ TruthfullQA:
 - [ ] OK maybe my own curated set?
 - [ ] Or just make a quick one to test manually...
 
+Refactoring
 - [ ] move common functs to src
-  - [ ] probe
-  - [ ] load model
-  - [ ] get_hidden_states
-  - [ ] get_choices_as_tokens
+  - [x] probe
+  - [x] load model
+  - [x] get_hidden_states
+  - [x] get_choices_as_tokens
+  - [ ] prompt format
+- [ ] get it working :poop:
