@@ -12,6 +12,9 @@ def enable_dropout(model, USE_MCDROPOUT:Union[float,bool]=True):
                 
                 
 def check_for_dropout(model, verbose=False):
+    """check if dropout is present.
+    
+    dropout is sometimes present but inactive, we test that later"""
     for m in model.modules():
         if m.__class__.__name__.startswith('Dropout'):
             if m.p>0:

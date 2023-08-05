@@ -1,20 +1,119 @@
-My own experiments with DLK
+
+# LLM truth detector using Monte Carlo Dropout
+
+Sometimes the best way to explain is with code:
+
+```py
+"""
+pseudocode for a LLM truth detector using Monte Carlo Dropout
+"""
+
+# load model
+model, tokenizer = load_model()
+
+# make dataset of hidden state pairs
+prompts = ["Is this true: a broken mirror gives 7 years bad luck [Yes/No]: ", 
+           "Is this true: a broken mirror doesn't give 7 years bad luck [Yes/No]: "]
+choice = ['Yes']
+choice_is_true = [-1, 1]
+
+def get_hidden_state_pairs(prompts, choice, choice_is_true, tokenizer, model):
+  """
+  We turn on dropout and predict the next token (repeat x2). Since dropout is turned on each prediction is slightly different.
+  Then we collect the hidden state pairs (as x1, x2) and the scores of our target token (as y1, y2)
+  """
+
+  choice_tokens = choice2token(choice, tokenizer)
+
+  # we enable dropout, and do 2 inferences that are slightly different
+  enable_mcdropout(model)
+
+  outputs1 = model.generate(prompts, output_hidden_states=True)
+  y1 = outputs1['scores'][choice_tokens]
+  x1 = outputs1["hidden_states"]
+
+  outputs2 = model.generate(prompts, output_hidden_states=True)
+  y2 = outputs2['scores'][choice_tokens]
+  x2 = outputs2["hidden_states"]
+  return x1, x2, y1, y2, choice_is_true
+
+dataset = batched(get_hidden_state_pairs(prompts, choice, choice_is_true, model, tokenizer))
+
+# now train a probe
+net = Probe(layers=2, hs=32)
+optim = Optim(lr=3e-4)
+for x1, x2, y1, y2, choice_is_true in dl:
+  y_pred1 = net(x1)
+  y_pred2 = net(x2)
+  y_pred = y_pred2-ypred1
+
+  # our label is the distance between the two probabilities in the direction of truth
+  # So if y2 is less true than y1, and they are 0.02% apart then y is -0.02%
+  y = (y2-y1)*choice_is_true 
+
+  # Use a MSE loss so that the distance between the predicted pair of scores (in the direction of truth)
+  # is the same as the real pair of scores (in the direction of truth)
+  loss = F.mse(y_pred, y)
+  net.backwards()
+  optim.step()
+
+# Test the probe
+prompts = ["Is this true: Ancients did not believe the world was flat [Yes/No]: ", 
+           "Is this true: Step on a crack break your fathers back [Yes/No]: "]
+choice = ['Yes']
+choice_is_true = [1, -1]
+x1, x2, y1, y2, choice_is_true = get_hidden_state_pairs(prompts, choice, choice_is_true, model, tokenizer)
+y_pred1 = net(x1)
+y_pred2 = net(x2)
+
+# translate this into a truth detector....
+pred_last_choice_is_true = y / (y_pred2-y_pred)
+pred_last_choice_is_true # [1, -1]
+```
+
+# Description
+There is some previous work on this ([ELK](https://github.com/EleutherAI/elk), [DLK](https://github.com/collin-burns/discovering_latent_knowledge/blob/main/CCS.ipynb), CSS, etc) that all take varias approaches. They have this in common:
+
+- Show the model 2 statements “the sky is blue” “the sky is green”
+- Get the hidden states from reading those statements
+- Use machine learning learning to distinguish between those two sets
+
+Now this works well [(or not?)](https://www.lesswrong.com/posts/bWxNPMy5MhPnQTzKz/what-discovering-latent-knowledge-did-and-did-not-find-4), but I aim for two improvements:
+- Detect direction of deception instead of truth
+- look at deceptive actions (outputs), not deceptive observations (inputs).
+- Use Monte Carlo dropout to generate pair of hidden states, instead pairs of inputs
+
+
+My contributions/finds so far:
+- Instead of comparing hidden states from 2 prompts, you can compare two inferences of the same prompt as long as you have dropout on
+  - For this pair of hidden states, one will be in the direction of truth and one will not
+    - But the pairs must give >10% differen't answer on our compared tokens e.g. true vs false
+  - We can detect this using a supervised probe (with 90% acc on IMBD sentiment analysis)
+- The best approach to setting up the probe is ~~binary classification~~, ~~multiclass classification~~ ~~ranking with margin_ranking_loss~~ ranking with L1smoothloss
+  - This is because treating it like a ranking problem decreases overfitting
+  - And learning distance and direction between the ranked pairs gives more supervision than just the direction (like in many ranking setups)
+- It's hard to get models to lie! Even for uncensored models. I find uncensored coding models are best
+
+
+## TODO:
+
+I'm trying to 
 
 - [x] use pytorch lightning
 - [x] batch hidden states 5x faster
 - [x] use wizcoer 15B, to see if larger models give better results
 - [x] eval on some deceptive or misleading statements
-- [ ] debug by looking at model output
-- [ ] test generalization
-- [ ] try differen't approaches
-  - [ ] setup
-    - [ ] detect deception vs truth
-    - [ ] differen't prompts
-    - [ ] differen't tasks
-  - [ ] model arch
-    - [ ] put in both states
-    - [ ] normalize states
-    - [ ] mix states at end
+- [x] debug by looking at model output
+- [x] test generalization
+- [x] try differen't approaches
+  - [x] setup
+    - [x] detect deception vs truth
+    - [x] differen't prompts
+    - [x] differen't tasks
+  - [x] model arch
+    - [x] put in both states
+    - [x] normalize states
+    - [x] mix states at end
 
 -------------
 

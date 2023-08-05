@@ -741,6 +741,70 @@ exp
 - no true switch... wait why did I switch it.. .weight
 - wait what 93% baseline wat?? oh wait we are just detecting the word positive lol! ignore this
 
+
+# Refactoring - start with Pseudo code
+
+```py
+# load model
+model, tokenizer = load_model()
+
+# make dataset of hidden state pairs
+prompts = ["a broken mirror gives 7 years bad luck: ", "a broken mirror doesn't give 7 years bad luck: "]
+# TODO do I just need one
+choices = [['No'], ['Yes']]
+last_choice_is_true = [-1, 1]
+
+def get_hidden_state_pairs(prompts, choices, last_choice_is_true, tokenizer, model):
+  """
+  We turn on dropout and predict the next token twice. Since dropout is on they are slightly different. Then we collect the hidden state pairs (x1, x2) and the probability of our target token (y1, y2)
+  """
+
+  choice_tokens = choice2token(choices, tokenizer)
+
+  # we enable dropout, and do 2 inferences that are slightly different
+  enable_mcdropout(model)
+
+  outputs1 = model.generate(prompts, output_hidden_states=True)
+  y1 = outputs1['scores'][choice_tokens]
+  x1 = outputs1["hidden_states"]
+
+  outputs2 = model.generate(prompts, output_hidden_states=True)
+  y2 = outputs2['scores'][choice_tokens]
+  x2 = outputs2["hidden_states"]
+  return x1, x2, y1, y2, last_choice_is_true
+
+dataset = batch(get_hidden_state_pairs(prompts, choices, last_choice_is_true, model, tokenizer))
+
+# now train a probe
+net = Probe(layers=2, hs=32)
+optim = Optim(lr=3e-4)
+for x1, x2, y1, y2, last_choice_is_true in dl:
+  y_pred1 = net(x1)
+  y_pred2 = net(x2)
+  y_pred = y_pred2-ypred1
+
+  # our label is the distance between the two probabilities in the direction of truth
+  # So if y2 is less true than y1, and they are 0.02% apart then y is -0.02%
+  y = (y2-y1)*last_choice_is_true 
+
+  # Use a MSE loss to that the distance between the predicted pair of scores (in the direction of truth) is the same as the pair of scores (in the direction of truth)
+  loss = F.mse(y_pred, y)
+  net.backwards()
+  optim.step()
+
+# now use the probe
+y_pred1 = net(x1)
+y_pred2 = net(x2)
+
+# translate this into a truth detector....
+pred_last_choice_is_true = y / (y_pred2-y_pred1)
+pred_last_choice_is_true
+```
+
+TODO
+- refactor to look like the psudocode
+
+
 # 2023-07-23 19:50:10
 
 Where was I?
@@ -768,3 +832,37 @@ Refactoring
   - [x] get_choices_as_tokens
   - [ ] prompt format
 - [ ] get it working :poop:
+  - [ ] dataset
+  - [ ] model
+
+So wait do I need to just record scores
+
+Now how does this all relate to truth and the prompt 
+
+So we are measuring if a particular token, that is could have answered with is true... but the model doesn't know which one!!!
+So it seems like there is some experimentation needed here. I should just save scores which will give me optionality.
+
+But really I should be looking at the most likely token right? No need for a choice?
+All I need to so is decide if this hidden state is more true.
+But if I chose an unlikely answer it seems misleading?
+
+Maybe I should be looking at hidden state condictional on a token. But how to do that?
+
+Well I'm really trying to tell if the most likely answer is true. So I just need to work out if the most likely answer is true using the labels. Then I can order the hidden states.
+
+# 2023-08-05 07:09:39
+
+TODO
+- [ ] add info or similar
+  - [x] ans
+  - [ ] choices
+  - [ ] do checks
+    - [ ] for high prob
+    - [ ] and acc
+- [ ] name ds
+- [ ] save ds
+- [ ] get model nb working
+
+
+Got unsupported ScalarType BFloat16
+But that's because we try to numpy it
