@@ -6,8 +6,10 @@ def rows_item(row):
     transform a row by turning singe dim arrays into items
     """
     for k,x in row.items():
-        if isinstance(x, np.ndarray) and x.ndim==0:
+        if isinstance(x, np.ndarray) and (x.ndim==0 or (x.ndim==1 and len(x)==1)):
             row[k]=x.item()
+        if isinstance(x, list) and len(x)==1:
+            row[k]=x[0]
     return row
 
 def ds_info2df(ds):

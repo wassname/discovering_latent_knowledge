@@ -3,9 +3,11 @@ from tqdm.auto import tqdm
 from src.datasets.hs import ExtractHiddenStates
 from torch.utils.data import DataLoader
 from datasets import Dataset
+import hashlib
+import pickle
 import numpy as np
 
-def batch_hidden_states(ehs: ExtractHiddenStates, data: Dataset, n=100, batch_size=2, mcdropout=True):
+def batch_hidden_states(model, tokenizer, data: Dataset, n=100, batch_size=2, mcdropout=True):
     """
     Given an encoder-decoder model, a list of data, computes the contrast hidden states on n random examples.
     Returns numpy arrays of shape (n, hidden_dim) for each candidate label, along with a boolean numpy array of shape (n,)
@@ -13,6 +15,7 @@ def batch_hidden_states(ehs: ExtractHiddenStates, data: Dataset, n=100, batch_si
     
     This is deliberately simple so that it's easy to understand, rather than being optimized for efficiency
     """
+    ehs = ExtractHiddenStates(model, tokenizer)
     
     ds_t_subset = data.select(range(n))
     ds_t_subset.set_format(type='torch', columns=['input_ids', 'label'])
@@ -27,21 +30,21 @@ def batch_hidden_states(ehs: ExtractHiddenStates, data: Dataset, n=100, batch_si
         index = i*batch_size+np.arange(nn)
         
         # different due to dropout
-        hs1 = ehs.get_batch_of_hidden_states(input_ids=input_ids, use_mcdropout=mcdropout)
+        hs0 = ehs.get_batch_of_hidden_states(input_ids=input_ids, use_mcdropout=mcdropout)
         if mcdropout:
-            hs2 = ehs.get_batch_of_hidden_states(input_ids=input_ids, use_mcdropout=mcdropout)
+            hs1 = ehs.get_batch_of_hidden_states(input_ids=input_ids, use_mcdropout=mcdropout)
             
             # QC
             if i==0:
                 eps=1e-5
                 mpe = lambda x,y: np.mean(np.abs(x-y)/(np.abs(x)+np.abs(y)+eps))
-                a,b=hs2['hidden_states'],hs1['hidden_states']
+                a,b=hs1['hidden_states'],hs0['hidden_states']
                 assert mpe(a,b)>eps, "the hidden state pairs should be different but are not. Check model.config.use_cache==False, check this model has dropout in it's arch"
                 
                 # FIXME, move check to loading?
-                # assert ((hs1['prob_y']+hs1['prob_n'])>0.5).all(), "your chosen binary answers should take up a lot of the prob space, otherwise choose differen't tokens"
+                # assert ((hs0['prob_y']+hs0['prob_n'])>0.5).all(), "your chosen binary answers should take up a lot of the prob space, otherwise choose differen't tokens"
         else:
-            hs2 = hs1
+            hs1 = hs0
 
         
         for j in range(nn):
@@ -50,14 +53,42 @@ def batch_hidden_states(ehs: ExtractHiddenStates, data: Dataset, n=100, batch_si
             info = ds_p_subset[k]
             
             yield dict(
-                hs1=hs1['hidden_states'][j],
-                scores1=hs1["scores"][j],
+                hs0=hs0['hidden_states'][j],
+                scores1=hs0["scores"][j],
                 
-                hs2=hs2['hidden_states'][j],
-                scores2=hs2["scores"][j],                    
+                hs1=hs1['hidden_states'][j],
+                scores2=hs1["scores"][j],                    
                 
                 true=true_labels[j].item(),
                 index=index[j],
                 
                 **info
             )
+
+
+def md5hash(s: bytes) -> str:
+    return hashlib.md5(s).hexdigest()
+
+# unique hash
+def get_unique_config_name(prompt_fn, model, tokenizer, data, N):
+    """
+    generates a unique name
+    
+    datasets would do this use the generation kwargs but this way we have control and can handle non-picklable models and thing like the output of prompt functions if they change
+    
+    # """
+    example_prompt1 = prompt_fn("text", response=0, lie=True)
+    model_repo = model.config._name_or_path
+    
+    kwargs = [str(model), str(tokenizer), str(data), str(prompt_fn.__name__), N]
+    key = pickle.dumps(kwargs, 1)
+    hsh = md5hash(key)[:6]
+
+    sanitize = lambda s:s.replace('/', '').replace('-', '_') if s is not None else s
+    config_name = f"{sanitize(model_repo)}-N_{N}-ns-{hsh}"
+    
+    info_kwargs = dict(model_repo=model_repo, config=model.config, data=str(data), prompt_fn=str(prompt_fn.__name__), N=N, 
+                       example_prompt1=example_prompt1, 
+                       config_name=config_name)
+    
+    return config_name, info_kwargs

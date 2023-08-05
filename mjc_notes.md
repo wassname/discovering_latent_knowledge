@@ -859,9 +859,10 @@ TODO
   - [ ] do checks
     - [ ] for high prob
     - [ ] and acc
-- [ ] name ds
-- [ ] save ds
+- [x] name ds
+- [x] save ds
 - [ ] get model nb working
+- [ ] round up the FIXME TODO UPTO HACK's
 
 
 Got unsupported ScalarType BFloat16
