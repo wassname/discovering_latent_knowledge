@@ -12,19 +12,23 @@ def rows_item(row):
             row[k]=x[0]
     return row
 
-def ds_info2df(ds):
-    info = list(ds['info'])
-    d = pd.DataFrame([rows_item(r) for r in info])
-    return d
 
-def ds2df(ds):
-    df = ds_info2df(ds)
-    df_ans = ds.select_columns(['ans1', 'ans2', 'true', 'index', 'prob_y', 'prob_n', 'version']).with_format("numpy").to_pandas()
-    df = pd.concat([df, df_ans], axis=1)
+def ds2df(ds, cols=None):
+    """one of our custom datasets into a dataframe
+    
+    dropping the large arrays and lists"""
+    if cols is None:
+        r = ds[0]
+        # get all the columns that not large lists or arrays
+        cols = [k for k,v in r.items() if (isinstance(v, np.ndarray) and len(v)<3) or not isinstance(v, (list, np.ndarray))]
+    
+    df = ds.select_columns(cols)
+    df = pd.DataFrame([rows_item(r) for r in df])
     
     # derived
     df['dir_true'] = df['ans2'] - df['ans1']
     df['conf'] = (df['ans1']-df['ans2']).abs()  
     df['llm_prob'] = (df['ans1']+df['ans2'])/2
     df['llm_ans'] = df['llm_prob']>0.5
+    df['desired_ans'] = df.label ^ df.lie
     return df

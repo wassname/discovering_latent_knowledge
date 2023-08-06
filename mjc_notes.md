@@ -853,12 +853,12 @@ Well I'm really trying to tell if the most likely answer is true. So I just need
 # 2023-08-05 07:09:39
 
 TODO
-- [ ] add info or similar
+- [x] add info or similar
   - [x] ans
-  - [ ] choices
-  - [ ] do checks
-    - [ ] for high prob
-    - [ ] and acc
+  - [x] choices
+  - [x] do checks
+    - [x] for high prob
+    - [x] and acc
 - [x] name ds
 - [x] save ds
 - [ ] get model nb working
@@ -878,3 +878,21 @@ ok it might be the padding!... it was!
 
 
 Lesson: padding can lead to weird outputs so it's best to use an attention mask to ignore it
+
+
+- [x] revisit refactor?
+- [x] round up the FIXME TODO UPTO HACK's
+- [ ] get model nb working
+- [ ] do multiple datasets
+
+# Collect hidden state pairs
+
+The idea is this: given two pairs of hidden states, where everything is the same except r dropout. Then tell me which one is more truthfull? 
+
+If this works, then for any inference, we can see which one is more truthfull. Then we can see if it's the lower or higher probability one, and judge the answer and true or false.
+
+Steps:
+- collect pairs of hidden states, where the inputs and outputs are the same. We modify the random seed and dropout.
+- Each pair should have a binary answer. We can get that by comparing the probabilities of two tokens such as Yes and No.
+- Train a prob to distinguish the pairs as more and less truthfull
+- Test probe to see if it generalizes

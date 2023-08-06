@@ -40,9 +40,6 @@ def batch_hidden_states(model, tokenizer, data: Dataset, n=100, batch_size=2, mc
                 mpe = lambda x,y: np.mean(np.abs(x-y)/(np.abs(x)+np.abs(y)+eps))
                 a,b=hs1['hidden_states'],hs0['hidden_states']
                 assert mpe(a,b)>eps, "the hidden state pairs should be different but are not. Check model.config.use_cache==False, check this model has dropout in it's arch"
-                
-                # FIXME, move check to loading?
-                # assert ((hs0['prob_y']+hs0['prob_n'])>0.5).all(), "your chosen binary answers should take up a lot of the prob space, otherwise choose differen't tokens"
         else:
             hs1 = hs0
 
@@ -70,7 +67,7 @@ def md5hash(s: bytes) -> str:
     return hashlib.md5(s).hexdigest()
 
 # unique hash
-def get_unique_config_name(prompt_fn, model, tokenizer, data, N):
+def get_unique_config_hash(prompt_fn, model, tokenizer, data, N):
     """
     generates a unique name
     
@@ -85,10 +82,20 @@ def get_unique_config_name(prompt_fn, model, tokenizer, data, N):
     hsh = md5hash(key)[:6]
 
     sanitize = lambda s:s.replace('/', '').replace('-', '_') if s is not None else s
-    config_name = f"{sanitize(model_repo)}-N_{N}-ns-{hsh}"
+    # config_name = f"{sanitize(model_repo)}-N_{N}-ns-{hsh}"
     
     info_kwargs = dict(model_repo=model_repo, config=model.config, data=str(data), prompt_fn=str(prompt_fn.__name__), N=N, 
                        example_prompt1=example_prompt1, 
-                       config_name=config_name)
+                       hsh=hsh)
     
-    return config_name, info_kwargs
+    return hsh, info_kwargs
+
+sanitize = lambda s:s.replace('/', '').replace('_', '-') if s is not None else s
+
+def ds_params2fname(dataset_params: dict) -> str:
+    prompt = sanitize(dataset_params['prompt_fmt'].__name__)
+    model_repo = sanitize(dataset_params['model_repo'].split('/')[-1])
+    dataset_name = sanitize(dataset_params['dataset_name'])
+    N = dataset_params['N']
+    N_SHOTS = dataset_params['N_SHOTS']
+    return f"model-{model_repo}_ds-{dataset_name}_{prompt}_N{N}_{N_SHOTS}shots_"

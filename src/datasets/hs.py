@@ -25,12 +25,31 @@ from torch.utils.data import DataLoader
 from datasets import Dataset
 import numpy as np
 
-default_class2choices = {False: ['No', 'Negative', 'no', 'false', 'wrong'], True: ['Yes', 'Positive', 'yes', 'true', 'correct', 'right']}
+default_class2choices = {False: ['No', 'Negative', 'no', 'false', 'wrong', 'False'], True: ['Yes', 'Positive', 'yes', 'true', 'correct', 'right', 'True']}
 
+def scores2choice_probs(row, class2_ids, keys=["scores1", "scores2"] ):
+    eps = 1e-5
+    out = {}
+    for key in keys:
+        scores = row[key]
+        probs = F.softmax(torch.from_numpy(scores), -1).numpy()
+        probs_c = [probs[class2_ids[c]].sum() for c in class2_ids]
+        
+        # balance of probs
+        out[key.replace("scores", "choice_probs")] = probs_c
+        out[key.replace("scores", "ans")] = probs_c[1] / (np.sum(probs_c) + eps)
+
+        # # balance of logits (much more exagerated)
+        # scores_c = [scores[class2_ids[c]].sum() for c in class2_ids]
+        # out[key.replace("scores", "ansb")] = torch.tensor(scores_c).softmax(-1)[1].item()
+    return out
+
+def choice2ids(tokenizer, class2hoices: Dict[bool, List[str]]) -> Dict[int, List[int]]:
+    return {k: get_choices_as_tokens(tokenizer, v) for k,v in class2hoices.items()}
 
 def get_choices_as_tokens(
     tokenizer, choices:List[str] = ["Positive"], whitespace_first=True
-) -> Tuple[List[int], List[int]]:
+) -> List[int]:
     
     # Note some tokenizers differentiate between "no", "\nno", so we sometime need to add whitespace beforehand...
     if not whitespace_first:
@@ -67,6 +86,8 @@ class ExtractHiddenStates:
     ):
         """
         Given a decoder model and a batch of texts, gets a pair of hidden states (in a given layer) on that input texts
+        
+        The idea is this: given two pairs of hidden states, where everything is the same except r dropout. Then tell me which one is more truthful? 
         """
         assert (input_ids is not None) or (input_text is not None), "need to provide input_ids or input_text"
         assert self.tokenizer.truncation_side == 'left'
