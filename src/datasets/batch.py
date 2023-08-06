@@ -51,10 +51,10 @@ def batch_hidden_states(model, tokenizer, data: Dataset, n=100, batch_size=2, mc
             
             yield dict(
                 hs0=hs0['hidden_states'][j],
-                scores1=hs0["scores"][j],
+                scores0=hs0["scores"][j],
                 
                 hs1=hs1['hidden_states'][j],
-                scores2=hs1["scores"][j],                    
+                scores1=hs1["scores"][j],                    
                 
                 true=true_labels[j].item(),
                 index=index[j],

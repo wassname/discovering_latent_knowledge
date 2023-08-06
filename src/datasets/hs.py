@@ -24,10 +24,21 @@ from tqdm.auto import tqdm
 from torch.utils.data import DataLoader
 from datasets import Dataset
 import numpy as np
+import torch.nn.functional as F
 
 default_class2choices = {False: ['No', 'Negative', 'no', 'false', 'wrong', 'False'], True: ['Yes', 'Positive', 'yes', 'true', 'correct', 'right', 'True']}
 
-def scores2choice_probs(row, class2_ids, keys=["scores1", "scores2"] ):
+def scores2choice_probs(row, class2_ids, keys=["scores0", "scores1"] ):
+    """ Given next_token scores (logits) we take only the subset the corresponds to our
+    - negative tokens (e.g. False, no, ...) 
+    - and positive tokens (e.g. Yes, yes, affirmative, ...).
+    
+    example output:
+    {'choice_probs1': array([0.39, 0.31 ], dtype=float32),
+    'ans1': 0.44,
+    'choice_probs2': array([0.44, 0.45], dtype=float32),
+    'ans2': 0.502,}
+    """
     eps = 1e-5
     out = {}
     for key in keys:
@@ -39,7 +50,7 @@ def scores2choice_probs(row, class2_ids, keys=["scores1", "scores2"] ):
         out[key.replace("scores", "choice_probs")] = probs_c
         out[key.replace("scores", "ans")] = probs_c[1] / (np.sum(probs_c) + eps)
 
-        # # balance of logits (much more exagerated)
+        # # balance of logits (much more exaggerated)
         # scores_c = [scores[class2_ids[c]].sum() for c in class2_ids]
         # out[key.replace("scores", "ansb")] = torch.tensor(scores_c).softmax(-1)[1].item()
     return out
