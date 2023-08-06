@@ -867,3 +867,14 @@ TODO
 
 Got unsupported ScalarType BFloat16
 But that's because we try to numpy it
+
+# 2023-08-06 07:58:41
+
+So right now generation is not working... but pipeline is. Why is that? Is thrre something I removed? Or the way I tokenizer?
+
+oh no actually generation is not working either, so it might be the prompt. Or that padding
+
+ok it might be the padding!... it was!
+
+
+Lesson: padding can lead to weird outputs so it's best to use an attention mask to ignore it

@@ -60,6 +60,7 @@ class ExtractHiddenStates:
         self,
         input_text: Optional[List[str]] = None,
         input_ids: torch.Tensor = None,
+        attention_mask: Optional[torch.Tensor] = None,
         truncation_length=999,
         use_mcdropout=True,
         debug=False,
@@ -71,29 +72,39 @@ class ExtractHiddenStates:
         assert self.tokenizer.truncation_side == 'left'
         
         if input_text:
-            input_ids = self.tokenizer(
+            t = self.tokenizer(
                 input_text,
                 return_tensors="pt",
                 add_special_tokens=True,
-                padding='max_length', max_length=truncation_length, truncation=True
-            ).input_ids.to(self.model.device)
+                padding='max_length', max_length=truncation_length, truncation=True, return_attention_mask=True,
+            )
+            input_ids = t.input_ids.to(self.model.device)
+            attention_mask = t.attention_mask.to(self.model.device)
 
         # forward pass
         last_token = -1
         with torch.no_grad():
             input_ids = input_ids.to(self.model.device)
+            
             self.model.eval()
             if use_mcdropout:
                 enable_dropout(self.model, use_mcdropout)
 
             # Forward for one step is the same as greedy generation for one step
             # https://github.com/huggingface/transformers/blob/234cfefbb083d2614a55f6093b0badfb2efc3b45/src/transformers/generation_utils.py#L1528
+            model_inputs = self.model.prepare_inputs_for_generation(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
             outputs = self.model.forward(
-                input_ids,
+                **model_inputs,
                 return_dict=True,
                 output_hidden_states=True,
-                use_cache=False,
             )
+            
+            # next_token_logits = outputs.logits[:, -1, :]
+
+            # # pre-process distribution
+            # next_token_scores = logits_processor(input_ids, next_token_logits)
+            # next_token_scores = logits_warper(input_ids, next_token_scores)
+            # probs = nn.functional.softmax(next_token_scores, dim=-1)
 
             outputs["scores"] = outputs.logits[:, last_token, :]
 

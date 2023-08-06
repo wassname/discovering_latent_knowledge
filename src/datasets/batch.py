@@ -18,21 +18,21 @@ def batch_hidden_states(model, tokenizer, data: Dataset, n=100, batch_size=2, mc
     ehs = ExtractHiddenStates(model, tokenizer)
     
     ds_t_subset = data.select(range(n))
-    ds_t_subset.set_format(type='torch', columns=['input_ids', 'label'])
+    ds_t_subset.set_format(type='torch', columns=['input_ids', 'label', 'attention_mask'])
     
     ds_p_subset = data.select(range(n))
     ds_p_subset.set_format(type="pandas", columns=['lie', 'label', 'prompt', 'prompt_truncated'])
     
     dl = DataLoader(ds_t_subset, batch_size=batch_size, shuffle=True)
     for i, batch in enumerate(tqdm(dl, desc='get hidden states')):
-        input_ids, true_labels =  batch["input_ids"], batch["label"]
+        input_ids, true_labels, attention_mask =  batch["input_ids"], batch["label"], batch["attention_mask"]
         nn = len(input_ids)
         index = i*batch_size+np.arange(nn)
         
         # different due to dropout
-        hs0 = ehs.get_batch_of_hidden_states(input_ids=input_ids, use_mcdropout=mcdropout)
+        hs0 = ehs.get_batch_of_hidden_states(input_ids=input_ids, attention_mask=attention_mask, use_mcdropout=mcdropout)
         if mcdropout:
-            hs1 = ehs.get_batch_of_hidden_states(input_ids=input_ids, use_mcdropout=mcdropout)
+            hs1 = ehs.get_batch_of_hidden_states(input_ids=input_ids, attention_mask=attention_mask, use_mcdropout=mcdropout)
             
             # QC
             if i==0:
