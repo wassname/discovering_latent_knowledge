@@ -38,6 +38,6 @@ class ConvProbe(nn.Module):
 
 
 class PLConvProbe(PLRanking):
-    def __init__(self, *args, **kwargs)
-        super().__init__(*args, **kwargs)
-        self.probe = MLPProbe(c_in, depth=depth, dropout=dropout, hs=hs)
+    def __init__(self, c_in, *args, depth=1, dropout=0, hs=16, **kwargs):
+        super().__init__(c_in, *args, depth=depth, dropout=dropout, hs=hs, **kwargs)
+        self.probe = ConvProbe(c_in, depth=depth, dropout=dropout, hs=hs)

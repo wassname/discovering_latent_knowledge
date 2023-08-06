@@ -897,4 +897,5 @@ Lesson: padding can lead to weird outputs so it's best to use an attention mask 
 - [x] revisit refactor?
 - [x] round up the FIXME TODO UPTO HACK's
 - [ ] get model nb working
-- [ ] do multiple datasets
+- [ ] do multiple datasets (esp TruthfullQA) adverseria_qa commonsense_qa. 
+  - [ ] in fact can I consume elk [defs](https://github.com/EleutherAI/elk/blob/main/elk/promptsource/templates/adversarial_qa/adversarialQA/templates.yaml)?

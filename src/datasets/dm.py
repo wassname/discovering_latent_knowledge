@@ -9,8 +9,8 @@ def make_y(df):
     # label: is ans2 more true than ans1
     # so we ask does ans2 have greater probability on "positive" than ans1
     # then, when the right answer is negative we swap the sign
-    true_switch_sign = df.true_answer*2-1
-    distance = (df.ans2-df.ans1) * true_switch_sign
+    true_switch_sign = df.label*2-1
+    distance = (df.ans1-df.ans0) * true_switch_sign
     # y = bool2switch(distance>0)
     return distance
 
@@ -29,7 +29,7 @@ class imdbHSDataModule(pl.LightningDataModule):
         
         # extract data set into N-Dim tensors and 1-d dataframe
         self.ds_hs = (
-            self.ds.select_columns(['hs1', 'hs2'])
+            self.ds.select_columns(['hs0', 'hs1'])
             .with_format("numpy")
         )
         self.df = ds2df(self.ds)
@@ -40,10 +40,10 @@ class imdbHSDataModule(pl.LightningDataModule):
         self.df['y'] = y_cls
         
         b = len(self.ds_hs)
-        self.hs1 = self.ds_hs['hs1'].transpose(0, 2, 1)
-        self.hs2 = self.ds_hs['hs2'].transpose(0, 2, 1)
+        self.hs1 = self.ds_hs['hs0'].transpose(0, 2, 1)
+        self.hs2 = self.ds_hs['hs1'].transpose(0, 2, 1)
+        self.ans0 = self.df['ans0'].values
         self.ans1 = self.df['ans1'].values
-        self.ans2 = self.df['ans2'].values
 
         # let's create a simple 50/50 train split (the data is already randomized)
         n = len(self.y)
