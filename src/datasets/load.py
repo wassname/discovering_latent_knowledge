@@ -20,7 +20,7 @@ def ds2df(ds, cols=None):
     if cols is None:
         r = ds[0]
         # get all the columns that not large lists or arrays
-        cols = [k for k,v in r.items() if (isinstance(v, np.ndarray) and len(v)<3) or not isinstance(v, (list, np.ndarray))]
+        cols = [k for k,v in r.items() if (isinstance(v, np.ndarray) and v.size<3) or not isinstance(v, (list, np.ndarray))]
     
     df = ds.select_columns(cols)
     df = pd.DataFrame([rows_item(r) for r in df])
