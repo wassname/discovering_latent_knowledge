@@ -2,17 +2,19 @@ import torch
 import torch.nn as nn
 import lightning as pl
 import pandas as pd
-from torch.utils.data import Dataset, DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset
 from src.datasets.load import ds2df
+from datasets.arrow_dataset import Dataset
 
-def make_y(df):
-    # label: is ans2 more true than ans1
-    # so we ask does ans2 have greater probability on "positive" than ans1
-    # then, when the right answer is negative we swap the sign
-    true_switch_sign = df.label*2-1
+def compute_distance(df):
+    """distance between ans1 and ans2."""
+    true_switch_sign = df.true*2-1 # switch sign to desired answer. with this we ask which is more true
+    # otherwise we ask which is more positive
     distance = (df.ans1-df.ans0) * true_switch_sign
-    # y = bool2switch(distance>0)
     return distance
+
+to_tensor = lambda x: torch.from_numpy(x).float()
+to_ds = lambda hs0, hs1, y: TensorDataset(to_tensor(hs0), to_tensor(hs1), to_tensor(y))
 
 class imdbHSDataModule(pl.LightningDataModule):
 
@@ -22,7 +24,7 @@ class imdbHSDataModule(pl.LightningDataModule):
                 ):
         super().__init__()
         self.save_hyperparameters(ignore=["ds"])
-        self.ds = ds.shuffle(seed=42)
+        self.ds = ds#.shuffle(seed=42)
 
     def setup(self, stage: str):
         h = self.hparams
@@ -34,46 +36,35 @@ class imdbHSDataModule(pl.LightningDataModule):
         )
         self.df = ds2df(self.ds)
         
-        y_cls = make_y(self.df)
+        y_cls = compute_distance(self.df)
         
         self.y = y_cls.values
         self.df['y'] = y_cls
         
         b = len(self.ds_hs)
-        self.hs1 = self.ds_hs['hs0'].transpose(0, 2, 1)
-        self.hs2 = self.ds_hs['hs1'].transpose(0, 2, 1)
+        self.hs0 = self.ds_hs['hs0'].transpose(0, 2, 1)
+        self.hs1 = self.ds_hs['hs1'].transpose(0, 2, 1)
         self.ans0 = self.df['ans0'].values
         self.ans1 = self.df['ans1'].values
 
         # let's create a simple 50/50 train split (the data is already randomized)
         n = len(self.y)
+        self.splits = {
+            'train': (0, int(n * 0.5)),
+            'val': (int(n * 0.5), int(n * 0.75)),
+            'test': (int(n * 0.75), n),
+        }
         
-        self.val_split = vs = int(n * 0.5)
-        self.test_split = ts = int(n * 0.75)
-        hs1_train, hs2_train, y_train = self.hs1[:vs], self.hs2[:vs], self.y[:vs]
-        hs1_val, hs2_val, y_val = self.hs1[vs:ts], self.hs2[vs:ts], self.y[vs:ts]
-        hs1_test, hs2_test, y_test = self.hs1[ts:],self. hs2[ts:], self.y[ts:]
-        
-        
-        to_ds = lambda x0, x1, y: TensorDataset(torch.from_numpy(x0).float(),
-                                      torch.from_numpy(x1).float(),
-                                      torch.from_numpy(y).float()
-                                      )
+        self.datasets = {key: to_ds(self.hs0[start:end], self.hs1[start:end], self.y[start:end]) for key, (start, end) in self.splits.items()}
 
-        self.ds_train = to_ds(hs1_train, hs2_train, y_train)
-
-        self.ds_val = to_ds(hs1_val, hs2_val, y_val)
-
-        self.ds_test = to_ds(hs1_test, hs2_test, y_test)
+    def create_dataloader(self, ds, shuffle=False):
+        return DataLoader(ds, batch_size=self.hparams.batch_size, drop_last=True, shuffle=shuffle)
 
     def train_dataloader(self):
-        return DataLoader(self.ds_train,
-                          batch_size=self.hparams.batch_size,
-                          drop_last=True,
-                          shuffle=True)
+        return self.create_dataloader(self.datasets['train'], shuffle=True)
 
     def val_dataloader(self):
-        return DataLoader(self.ds_val, batch_size=self.hparams.batch_size, drop_last=True,)
+        return self.create_dataloader(self.datasets['val'])
 
     def test_dataloader(self):
-        return DataLoader(self.ds_test, batch_size=self.hparams.batch_size, drop_last=True,)
+        return self.create_dataloader(self.datasets['test'])

@@ -2,7 +2,7 @@
 from tqdm.auto import tqdm
 from src.datasets.hs import ExtractHiddenStates
 from torch.utils.data import DataLoader
-from datasets import Dataset
+from datasets.arrow_dataset import Dataset
 import hashlib
 import pickle
 import numpy as np
@@ -23,7 +23,7 @@ def batch_hidden_states(model, tokenizer, data: Dataset, n=100, batch_size=2, mc
     ds_p_subset = data.select(range(n))
     ds_p_subset.set_format(type="pandas", columns=['lie', 'label', 'prompt', 'prompt_truncated'])
     
-    dl = DataLoader(ds_t_subset, batch_size=batch_size, shuffle=True)
+    dl = DataLoader(ds_t_subset, batch_size=batch_size, shuffle=False)
     for i, batch in enumerate(tqdm(dl, desc='get hidden states')):
         input_ids, true_labels, attention_mask =  batch["input_ids"], batch["label"], batch["attention_mask"]
         nn = len(input_ids)
@@ -47,7 +47,9 @@ def batch_hidden_states(model, tokenizer, data: Dataset, n=100, batch_size=2, mc
         for j in range(nn):
             # let's add the non torch metadata like label, prompt, lie, etc
             k = i*batch_size + j
-            info = ds_p_subset[k]
+            info = ds_p_subset[k].iloc[0].to_dict()
+            
+            assert info['label']==true_labels[j].item(), 'these should line up'
             
             yield dict(
                 hs0=hs0['hidden_states'][j],
@@ -56,8 +58,8 @@ def batch_hidden_states(model, tokenizer, data: Dataset, n=100, batch_size=2, mc
                 hs1=hs1['hidden_states'][j],
                 scores1=hs1["scores"][j],                    
                 
-                true=true_labels[j].item(),
-                index=index[j],
+                label_b=true_labels[j].item(),
+                ds_index=index[j],
                 
                 **info
             )

@@ -62,7 +62,7 @@ def get_choices_as_tokens(
     tokenizer, choices:List[str] = ["Positive"], whitespace_first=True
 ) -> List[int]:
     
-    # Note some tokenizers differentiate between "no", "\nno", so we sometime need to add whitespace beforehand...
+    # Note some tokenizers differentiate between "yes", "\nyes" and " yes", so we sometime need to add whitespace beforehand...
     if not whitespace_first:
         raise NotImplementedError('TODO')
     
@@ -72,7 +72,7 @@ def get_choices_as_tokens(
         ids.append(id_)
         
         c2 = tokenizer.decode([id_])
-        assert tokenizer.decode([id_]) == c, f'tokenizer.decode(tokenizer(`{c}`))==`{c2}`!=`{c}`'
+        assert tokenizer.decode([id_]) == c, f'We should be able to encode and decode the choices, but it failed: tokenizer.decode(tokenizer(`{c}`))==`{c2}`!=`{c}`'
 
     return ids
 
@@ -154,6 +154,7 @@ class ExtractHiddenStates:
             hidden_states=hidden_states,
             scores=outputs["scores"],
             input_ids=input_ids,
+            layers=layers,
         )
         out = {k: to_numpy(v) for k, v in out.items()}
         if debug:            

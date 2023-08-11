@@ -2,8 +2,10 @@ from pytorch_optimizer import Ranger21
 import torchmetrics
 import lightning.pytorch as pl
 import torch
+import torch.nn.functional as F
 import torch.nn as nn
 from torchmetrics import Metric, MetricCollection, Accuracy, AUROC
+from torchmetrics.functional import accuracy
 
 from src.helpers import switch2bool, bool2switch
     
@@ -15,19 +17,8 @@ class PLRanking(pl.LightningModule):
     """
     def __init__(self, c_in, total_steps, depth=1, hs=16, lr=4e-3, weight_decay=1e-9, dropout=0):
         super().__init__()
-        # self.probe = MLPProbe(c_in, depth=depth, dropout=dropout, hs=hs)
+        self.probe = None # subclasses must add this
         self.save_hyperparameters()
-        
-        self.loss_fn = nn.SmoothL1Loss()
-        
-        # metrics for each stage
-        metrics_template = MetricCollection({
-            'acc': Accuracy(task="binary"), 
-            'auroc': AUROC(task="binary")
-        })
-        self.metrics = torch.nn.ModuleDict({
-            f'metrics_{stage}': metrics_template.clone(prefix=stage+'/') for stage in ['train', 'val', 'test']
-        })
         
     def forward(self, x):
         return self.probe(x).squeeze(1)
@@ -40,14 +31,14 @@ class PLRanking(pl.LightningModule):
         if stage=='pred':
             return (ypred1-ypred0).float()
         
-        loss = self.loss_fn(ypred1-ypred0, y)
-        self.log(f"{stage}/loss", loss)
-        
-        m = self.metrics[f'metrics_{stage}']
+        loss = F.smooth_l1_loss(ypred1-ypred0, y)
+        # self.log(f"{stage}/loss", loss)
         
         y_cls = switch2bool(ypred1-ypred0)
-        m(y_cls, y>0.)
-        self.log_dict(m, on_epoch=True, on_step=False)
+        self.log_dict({
+            f"{stage}/acc": accuracy(y_cls, y>0, "binary"),
+            f"{stage}/loss": loss,
+        }, on_epoch=True, on_step=False),
         return loss
     
     def training_step(self, batch, batch_idx=0, dataloader_idx=0):

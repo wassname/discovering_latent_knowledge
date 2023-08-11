@@ -896,6 +896,46 @@ Lesson: padding can lead to weird outputs so it's best to use an attention mask 
 
 - [x] revisit refactor?
 - [x] round up the FIXME TODO UPTO HACK's
-- [ ] get model nb working
+- [x] get model nb working
+  - [ ] tidy
 - [ ] do multiple datasets (esp TruthfullQA) adverseria_qa commonsense_qa. 
   - [ ] in fact can I consume elk [defs](https://github.com/EleutherAI/elk/blob/main/elk/promptsource/templates/adversarial_qa/adversarialQA/templates.yaml)?
+
+
+# 2023-08-07 08:24:43
+
+Oh no it's not generalising. And I realised that by having multiple duplicate datasets I was mixing test and train duh! Start again
+
+- normalise stops it from overfitting... or learnign at all? What's going on. Did I mix up test train os hs1 hs2?
+
+huh in the dm notebook I get 100 and 60% with linear cls. But in 023 I get 100 50% weird. And with norm I get 50% 50%
+
+:bug: I had hs0 hs0, wtf
+
+err so manbe ranking is not the best! do I need to try other models again?
+
+- [ ] try other setups? cls, (hs0-hs1)/y etc
+- [ ] try restricting to question where it can answer it?
+- [ ] try removign truncated ones?
+
+
+wait what? when the model tries to lie... we get this acc 0.49
+
+
+wait
+- test metrics says it works
+- but train and val don't!
+- and my custon ones dont?
+
+
+on one hand we have acc at prob predicting ans1>ans2
+on the other prob at predicting label
+on another llm at answer
+
+So I can predict if one is more positvie than other
+at least using ranking loss. hmm
+
+
+wooo true and label are diff!!! even tho they come from the same source :bug:
+
+found the bug, I shuffled X but not y  lol
