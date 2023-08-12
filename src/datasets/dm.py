@@ -8,7 +8,7 @@ from datasets.arrow_dataset import Dataset
 
 def compute_distance(df):
     """distance between ans1 and ans2."""
-    true_switch_sign = df.true*2-1 # switch sign to desired answer. with this we ask which is more true
+    true_switch_sign = df.label*2-1 # switch sign to desired answer. with this we ask which is more true
     # otherwise we ask which is more positive
     distance = (df.ans1-df.ans0) * true_switch_sign
     return distance
@@ -58,7 +58,7 @@ class imdbHSDataModule(pl.LightningDataModule):
         self.datasets = {key: to_ds(self.hs0[start:end], self.hs1[start:end], self.y[start:end]) for key, (start, end) in self.splits.items()}
 
     def create_dataloader(self, ds, shuffle=False):
-        return DataLoader(ds, batch_size=self.hparams.batch_size, drop_last=True, shuffle=shuffle)
+        return DataLoader(ds, batch_size=self.hparams.batch_size, drop_last=False, shuffle=shuffle)
 
     def train_dataloader(self):
         return self.create_dataloader(self.datasets['train'], shuffle=True)
