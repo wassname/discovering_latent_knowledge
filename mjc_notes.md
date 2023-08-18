@@ -7,6 +7,16 @@ mamba install -y ipykernel pip
 pip install -r requirements.txt
 ```
 
+```sh
+# note 
+conda create -n dlk3 python=3.11 -y
+conda activate dlk3
+mamba install -y pytorch torchvision torchaudio pytorch-cuda=11.7 cudatoolkit-dev==11.7  cudatoolkit=11.7 -c pytorch -c nvidia  -c conda-forge
+mamba install -y ipykernel pip
+pip install -r requirements.txt
+```
+
+
 # 2023-05-13 15:17:05
 
 - [x] Convert it to lightning
@@ -939,3 +949,78 @@ at least using ranking loss. hmm
 wooo true and label are diff!!! even tho they come from the same source :bug:
 
 found the bug, I shuffled X but not y  lol
+
+# 2023-08-12 12:45:15
+
+It doesn't seem to generalize to the new datasets....
+
+- **although we can't seem to LEARN the new datasets either so there may be something wrong with them**
+  - Maybe it's just to hard? As TQA is actually hard? 
+  - [x] add the "check it knows" thing
+    - [ ] yeah it doesn't know. 50% accuracy against a 50% baseline
+
+- what tricks does ELK have?
+- Maybe I just need more diverse datasets and prompts in order to generalise?
+  - E.g. not just gaurds
+  - E.g. not just true false?
+  - in this case I might need to fork elk?
+    - well as well as varying inputs and chocies I need to
+      - [ ] add mcdropout
+      - [ ] check the model knows the truth
+      - [ ] make sure the model lies ~10-90% of the time, even when it knows the answer.... This is opposed to elk where it reads a lie. For this I can inject syste prompts?
+  - [ ] Can I just do synthetic data? E.g. 1+1=3? https://huggingface.co/datasets/math_dataset/blob/main/math_dataset.py
+  - [ ] https://huggingface.co/datasets/datacommons_factcheck
+  - [ ] https://huggingface.co/datasets/diplomacy_detection
+
+
+Essentially I've found a solution that finds the hidden state with more truth, but it does not generalize. I've got reason to think I'm onto a possiblity of generalization, since my solution in invariant to prompt. But it's normal to need a lot of varied data to force a good solution!
+
+
+So my new dataset setup should have these properties
+- binary choices
+  - [ ] false ture
+  - [ ] no yes
+  - [ ] negative positive
+- [ ] should be easily solvable by the model!
+  - I can do a test batch to make sure:
+    - acc is high
+    - my choices are likely
+  - prompt fmt as defined by arguents:
+    - version -> instruction, char
+    - choices
+
+
+
+In the mean time lets check if TQA acc is high.... notebooks/03b_make_dataset_TQA_true_false_SCRATCH.ipynb
+
+- [ ] TQA pretty much fails.... find another OOS easy dataset. It's too hard to a small model
+- [ ] Mabe facts, logic, or simple arithmetic?
+
+
+
+
+# 2023-08-13 11:42:06
+
+UPTO
+- I shared my psuecode in discord. Crickets
+- I tried forking ELK so that I could use it's prompts. It's complex... but maybe I I only use it's questions it will be easier and better?
+  - because their one shots are sometimes repeats.. but it's OK
+  - but the questions are good in that they have binary choices?
+  - just install elk, and use their prompts!
+  - I will need to
+    - make sure they have 2 choices
+    - inject preamble to make them lie >10% of the time
+    - chose easy dataset
+
+# 2023-08-18 09:32:54
+
+So the work really is getting the datasets going.
+
+It makes sense to use minimal ELK stuff like prompts
+
+but I can't just copy it because I need to make sure
+- 2 choices
+- preamble
+- easy datasets, or datasets with an answer
+
+notebooks/01_scratch_elk.ipynb

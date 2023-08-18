@@ -4,12 +4,12 @@ import torch.nn as nn
 from .pl_ranking import PLRanking
 
 class ConvProbe(nn.Module):
-    def __init__(self, c_in, depth=0, hs=16, dropout=0):
+    def __init__(self, c_in, depth=0, hs=16, dropout=0, input_dropout=0):
         super().__init__()
 
         layers = [
             nn.BatchNorm1d(c_in, affine=False),  # this will normalise the inputs
-            nn.Dropout1d(dropout),
+            nn.Dropout1d(input_dropout),
             
             nn.Conv1d(c_in, hs*(depth+1), kernel_size=2),
             nn.ReLU(),
@@ -38,6 +38,6 @@ class ConvProbe(nn.Module):
 
 
 class PLConvProbe(PLRanking):
-    def __init__(self, c_in, *args, depth=1, dropout=0, hs=16, **kwargs):
-        super().__init__(c_in, *args, depth=depth, dropout=dropout, hs=hs, **kwargs)
-        self.probe = ConvProbe(c_in, depth=depth, dropout=dropout, hs=hs)
+    def __init__(self, c_in, total_steps, lr=4e-3, weight_decay=1e-9, **kwargs):
+        super().__init__(total_steps=total_steps, lr=lr, weight_decay=weight_decay)
+        self.probe = ConvProbe(c_in, **kwargs)

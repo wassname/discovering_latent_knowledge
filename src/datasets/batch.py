@@ -1,11 +1,14 @@
 
 from tqdm.auto import tqdm
-from src.datasets.hs import ExtractHiddenStates
 from torch.utils.data import DataLoader
 from datasets.arrow_dataset import Dataset
 import hashlib
 import pickle
 import numpy as np
+
+from src.datasets.hs import ExtractHiddenStates
+from src.helpers.typing import float_to_int16, int16_to_float
+
 
 def batch_hidden_states(model, tokenizer, data: Dataset, n=100, batch_size=2, mcdropout=True):
     """
@@ -52,10 +55,10 @@ def batch_hidden_states(model, tokenizer, data: Dataset, n=100, batch_size=2, mc
             assert info['label']==true_labels[j].item(), 'these should line up'
             
             yield dict(
-                hs0=hs0['hidden_states'][j],
+                hs0=float_to_int16(hs0['hidden_states'][j]),
                 scores0=hs0["scores"][j],
                 
-                hs1=hs1['hidden_states'][j],
+                hs1=float_to_int16(hs1['hidden_states'][j]),
                 scores1=hs1["scores"][j],                    
                 
                 label_b=true_labels[j].item(),

@@ -28,6 +28,14 @@ import torch.nn.functional as F
 
 default_class2choices = {False: ['No', 'Negative', 'no', 'false', 'wrong', 'False'], True: ['Yes', 'Positive', 'yes', 'true', 'correct', 'right', 'True']}
 
+def class2choices_to_choices(class2choices):
+    return [class2choices[i][0] for i in sorted(class2choices)]
+
+def label_to_choice(label: bool, class2choices=default_class2choices) -> str:
+    """turns a label like 0 to a choice like No"""
+    choices = class2choices_to_choices(class2choices)
+    return choices[label]
+
 def scores2choice_probs(row, class2_ids, keys=["scores0", "scores1"] ):
     """ Given next_token scores (logits) we take only the subset the corresponds to our
     - negative tokens (e.g. False, no, ...) 

@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 
+from src.helpers.typing import int16_to_float, float_to_int16
+
 def rows_item(row):
     """
     transform a row by turning singe dim arrays into items
@@ -32,3 +34,7 @@ def ds2df(ds, cols=None):
     df['llm_ans'] = df['llm_prob']>0.5
     df['desired_ans'] = df.label ^ df.lie
     return df
+
+def load_ds(f):
+    ds = load_dataset(f)
+    return ds.map(lambda x: {'hs0': int16_to_float(x['hs0']), 'hs1': int16_to_float(x['hs1'])})
