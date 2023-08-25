@@ -1,0 +1,5 @@
+templates:
+  chatml: "{% if system %}<|system|>{{system}}\n<end>\n{% endif %}<|user|>{{user}}\n<|end|>\n<|response|>{{response}}{% if response %}\n<|end|>\n{% endif %}"
+
+  # # https://github.com/tloen/alpaca-lora/blob/main/templates/alpaca.json
+  llama: "{% if system %}{{system}}\n\n{% endif %}### Instruction\n{{user}}\n\n### Response:\n{{response}}{% if response %}\n\n{% endif %}"

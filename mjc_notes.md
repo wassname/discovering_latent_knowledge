@@ -1024,3 +1024,36 @@ but I can't just copy it because I need to make sure
 - easy datasets, or datasets with an answer
 
 notebooks/01_scratch_elk.ipynb
+
+# 2023-08-19 12:58:04
+
+
+- [x] add sysinst that is random for each one. Various statements to make it lie part of the time. I could also just do qlora like ELK
+  - [x] prompts are differen't ways of asking the question
+  - [x] sysinst are differen't commands that might make it lie, tell the truth, or be unsure
+- [x] add the ability to lie in the multishots
+- [ ] check lies and multishots!
+- [ ] add cfg
+- [ ] what about chatml vs llama format??
+  - [ ] I can add a metatemplate with [q, a] and [sys, rest]
+
+But wait, how much does the preamble contribute to the lies, and how much does the multishot?? Need to run an experiment to understand this.
+
+# 2023-08-25 08:59:59
+
+On discord someone point out that my approach of taking deception as: wrong answer where it could otherwise answer them has a flaw. What if you then increase the answer with CoT/MultiShot/better prompting. Then it turns out it could answer all along, it's just that your prompting was confusing. The examples where this is true seem to be a case of the model being confused, rather than deceptive.
+
+We have these categories of examples:
+- that it can always solve "sentiment of terrible"
+- that it can solve only with advanced prompting methods. This seems to be examples where it's confused about what the user wants "e.g. step on a crack break you fathers..."
+- the ones it could solve with the best prompting methods
+- that it can never solve because it does not know  "who is the president of the UWA in 2040"
+
+
+# 2023-08-25 12:28:24
+
+OK we have all the pieces. Lets build it
+
+- config object
+- chose a random true and false one for each example?
+- do 1000. and see which sys prompts helped?
