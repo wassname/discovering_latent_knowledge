@@ -40,3 +40,6 @@ class ExtractConfig(Serializable):
 
     token_loc: Literal["first", "last", "mean"] = "last"
     """The location of the token to extract hidden states from."""
+    
+    template_path: str | None = None
+    """Path to pass into `DatasetTemplates`. By default we use the dataset name."""

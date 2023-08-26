@@ -1057,3 +1057,5 @@ OK we have all the pieces. Lets build it
 - config object
 - chose a random true and false one for each example?
 - do 1000. and see which sys prompts helped?
+
+batch_hidden_states

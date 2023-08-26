@@ -33,7 +33,7 @@ def load_prompt_structure(path='structure.yaml', prompt_format='chatml'):
 def load_default_sys_instructions(path='system.yaml'):
     f = TEMPLATES_FOLDER_PATH / path
     yaml_dict = yaml.load(f.open('r'), Loader=yaml.FullLoader)
-    templates = yaml_dict["templates"]
+    templates = yaml_dict["templates"]["falsity"]
     return templates
 
 default_sys_instructions = load_default_sys_instructions()
@@ -43,7 +43,7 @@ def load_prompts(
     ds_string: str,
     *,
     sys_instructions: Dict[bool, Dict[str, str]]= default_sys_instructions,
-    binarize: bool = False,
+    binarize: bool = True,
     num_shots: int = 0,
     seed: int = 42,
     split_type: Literal["train", "val"] = "train",
@@ -176,10 +176,10 @@ def _convert_to_prompts(
         rng.shuffle(label_choices)
 
     for template in templates:
-        for lie in [False, True]:
-            for sys_instr_name, sys_instr in sys_instructions[lie].items():
+        for instructed_to_lie in [False, True]:
+            for sys_instr_name, sys_instr in sys_instructions[instructed_to_lie].items():
                 fake_example = example.copy()
-                if lie: fake_example['label'] = int(fake_example['label']==0)
+                if instructed_to_lie: fake_example['label'] = int(fake_example['label']==0)
 
                 q, a = template.apply(fake_example)
                 prompt_parts = [dict(user=q)]
@@ -188,7 +188,7 @@ def _convert_to_prompts(
                 if fewshot_iter is not None:
                     # Infinite iterator so we don't need to worry about StopIteration
                     fewshot_examples = next(fewshot_iter)
-                    if lie: fewshot_examples = [{**e, 'label': ~e['label']} for e in fewshot_examples]
+                    if instructed_to_lie: fewshot_examples = [{**e, 'label': ~e['label']} for e in fewshot_examples]
                     fewshot_texts = [
                         dict(user=q, response=a) for q, a in map(template.apply, fewshot_examples)
                     ]
@@ -208,7 +208,7 @@ def _convert_to_prompts(
                     template_name=template.name,
                     label_true=example['label'],
                     label_instructed=fake_example['label'],
-                    instructed_to_lie=lie,
+                    instructed_to_lie=instructed_to_lie,
                     sys_instr_name=sys_instr_name,
                 ))
 
@@ -217,11 +217,4 @@ def _convert_to_prompts(
     if dup_count > 1:
         raise ValueError(f'Prompt duplicated {dup_count} times! "{maybe_dup}"')
 
-    # Our reporter training and evaluation code assumes that the labels are integers.
-    # If they're not, we need to convert them with index(). label_choices is guaranteed
-    # to be sorted (see above).
-    return dict(
-        label=label_choices.index(label),
-        prompts=prompts,
-        template_names=[template.name for template in templates],
-    )
+    return prompts

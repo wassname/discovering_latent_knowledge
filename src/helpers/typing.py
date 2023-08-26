@@ -12,6 +12,6 @@ def float_to_int16(x: torch.Tensor) -> torch.Tensor:
     return downcast.view(torch.int16)
 
 
-def int16_to_float32(x: torch.Tensor) -> torch.Tensor:
+def int16_to_float(x: torch.Tensor) -> torch.Tensor:
     """Converts int16 to float16, then reinterprets as float32."""
     return x.view(torch.float16).type(torch.float32)

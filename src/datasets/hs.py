@@ -36,7 +36,7 @@ def label_to_choice(label: bool, class2choices=default_class2choices) -> str:
     choices = class2choices_to_choices(class2choices)
     return choices[label]
 
-def scores2choice_probs(row, class2_ids, keys=["scores0", "scores1"] ):
+def scores2choice_probs(row, class2_ids: List[int], keys=["scores0", "scores1"] ):
     """ Given next_token scores (logits) we take only the subset the corresponds to our
     - negative tokens (e.g. False, no, ...) 
     - and positive tokens (e.g. Yes, yes, affirmative, ...).
@@ -52,7 +52,7 @@ def scores2choice_probs(row, class2_ids, keys=["scores0", "scores1"] ):
     for key in keys:
         scores = row[key]
         probs = F.softmax(torch.from_numpy(scores), -1).numpy()
-        probs_c = [probs[class2_ids[c]].sum() for c in class2_ids]
+        probs_c = [probs[c].sum() for c in class2_ids]
         
         # balance of probs
         out[key.replace("scores", "choice_probs")] = probs_c
@@ -63,8 +63,8 @@ def scores2choice_probs(row, class2_ids, keys=["scores0", "scores1"] ):
         # out[key.replace("scores", "ansb")] = torch.tensor(scores_c).softmax(-1)[1].item()
     return out
 
-def choice2ids(tokenizer, class2hoices: Dict[bool, List[str]]) -> Dict[int, List[int]]:
-    return {k: get_choices_as_tokens(tokenizer, v) for k,v in class2hoices.items()}
+def choice2ids(tokenizer, class2hoices: List[str]) -> List[int]:
+    return [get_choices_as_tokens(tokenizer, v) for v in class2hoices]
 
 def get_choices_as_tokens(
     tokenizer, choices:List[str] = ["Positive"], whitespace_first=True
