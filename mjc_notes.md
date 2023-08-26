@@ -1059,3 +1059,12 @@ OK we have all the pieces. Lets build it
 - do 1000. and see which sys prompts helped?
 
 batch_hidden_states
+
+# 2023-08-26 16:39:31
+
+Wires it up a bit more. Now I need to debug. For example my chosen asnwers are onl y20%
+
+
+4mins for 100
+40 mins for 1000
+

@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-
+from datasets import load_dataset
 from src.helpers.typing import int16_to_float, float_to_int16
 
 def rows_item(row):
@@ -32,7 +32,7 @@ def ds2df(ds, cols=None):
     df['conf'] = (df['ans0']-df['ans1']).abs()  
     df['llm_prob'] = (df['ans0']+df['ans1'])/2
     df['llm_ans'] = df['llm_prob']>0.5
-    df['desired_ans'] = df.label ^ df.lie
+    # df['desired_ans'] = df.label ^ df.lie
     return df
 
 def load_ds(f):
