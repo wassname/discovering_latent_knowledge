@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 import lightning as pl
-import torch
 from loguru import logger
 from transformers import (
     AutoTokenizer,
@@ -24,65 +23,8 @@ from tqdm.auto import tqdm
 from torch.utils.data import DataLoader
 from datasets import Dataset
 import numpy as np
+import torch
 import torch.nn.functional as F
-
-default_class2choices = {False: ['No', 'Negative', 'no', 'false', 'wrong', 'False'], True: ['Yes', 'Positive', 'yes', 'true', 'correct', 'right', 'True']}
-
-def class2choices_to_choices(class2choices):
-    return [class2choices[i][0] for i in sorted(class2choices)]
-
-def label_to_choice(label: bool, class2choices=default_class2choices) -> str:
-    """turns a label like 0 to a choice like No"""
-    choices = class2choices_to_choices(class2choices)
-    return choices[label]
-
-def scores2choice_probs(row, class2_ids: List[int], keys=["scores0", "scores1"] ):
-    """ Given next_token scores (logits) we take only the subset the corresponds to our
-    - negative tokens (e.g. False, no, ...) 
-    - and positive tokens (e.g. Yes, yes, affirmative, ...).
-    
-    example output:
-    {'choice_probs1': array([0.39, 0.31 ], dtype=float32),
-    'ans1': 0.44,
-    'choice_probs2': array([0.44, 0.45], dtype=float32),
-    'ans2': 0.502,}
-    """
-    eps = 1e-5
-    out = {}
-    for key in keys:
-        scores = row[key]
-        probs = F.softmax(torch.from_numpy(scores), -1).numpy()
-        probs_c = [probs[c].sum() for c in class2_ids]
-        
-        # balance of probs
-        out[key.replace("scores", "choice_probs")] = probs_c
-        out[key.replace("scores", "ans")] = probs_c[1] / (np.sum(probs_c) + eps)
-
-        # # balance of logits (much more exaggerated)
-        # scores_c = [scores[class2_ids[c]].sum() for c in class2_ids]
-        # out[key.replace("scores", "ansb")] = torch.tensor(scores_c).softmax(-1)[1].item()
-    return out
-
-def choice2ids(tokenizer, class2hoices: List[str]) -> List[int]:
-    return [get_choices_as_tokens(tokenizer, v) for v in class2hoices]
-
-def get_choices_as_tokens(
-    tokenizer, choices:List[str] = ["Positive"], whitespace_first=True
-) -> List[int]:
-    
-    # Note some tokenizers differentiate between "yes", "\nyes" and " yes", so we sometime need to add whitespace beforehand...
-    if not whitespace_first:
-        raise NotImplementedError('TODO')
-    
-    ids = []
-    for c in choices:
-        id_ = tokenizer(f"\n{c}", add_special_tokens=True)["input_ids"][-1]
-        ids.append(id_)
-        
-        c2 = tokenizer.decode([id_])
-        assert tokenizer.decode([id_]) == c, f'We should be able to encode and decode the choices, but it failed: tokenizer.decode(tokenizer(`{c}`))==`{c2}`!=`{c}`'
-
-    return ids
 
 
 @dataclass
