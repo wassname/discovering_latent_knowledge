@@ -8,7 +8,7 @@ from datasets.arrow_dataset import Dataset
 
 def compute_distance(df):
     """distance between ans1 and ans2."""
-    true_switch_sign = df.label*2-1 # switch sign to desired answer. with this we ask which is more true
+    true_switch_sign = df.label_true*2-1 # switch sign to desired answer. with this we ask which is more true
     # otherwise we ask which is more positive
     distance = (df.ans1-df.ans0) * true_switch_sign
     return distance

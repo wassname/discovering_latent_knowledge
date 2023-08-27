@@ -1068,3 +1068,11 @@ Wires it up a bit more. Now I need to debug. For example my chosen asnwers are o
 4mins for 100
 40 mins for 1000
 
+# 2023-08-27 13:38:33
+
+So I got a dataset I want to
+- try training a prob on probs
+- try training a probe on expnses probs
+- look at diff between probs and expanded probs
+- looks at llm acc by dataset, lie by dataset, prob acc by dataset
+- finally look at generaliation
