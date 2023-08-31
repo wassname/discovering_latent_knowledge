@@ -128,8 +128,8 @@ def load_prompts(
             print("No label column found, not balancing")
         ds = ds.to_iterable_dataset()
 
-    for example in ds:
-        yield _convert_to_prompts(
+    for i, example in enumerate(ds):
+        prompts = _convert_to_prompts(
             example,
             binarize=binarize,
             label_column=label_column,
@@ -140,6 +140,8 @@ def load_prompts(
             fewshot_iter=fewshot_iter,
             prompt_format=prompt_format,
         )
+        prompts = [{'ds_string': ds_string, 'example_i':i, **p} for p in prompts]
+        yield prompts
         
 
 

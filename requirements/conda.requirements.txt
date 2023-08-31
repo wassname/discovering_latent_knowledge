@@ -1,4 +1,4 @@
-accelerate @ git+https://github.com/huggingface/accelerate.git@7d24bdefb5b3252505151d8c1ac0efbed3574857
+accelerate==0.20.3
 aiohttp==3.8.4
 aiosignal==1.3.1
 altair==5.0.0
@@ -22,6 +22,7 @@ certifi==2023.5.7
 cffi @ file:///home/conda/feedstock_root/build_artifacts/cffi_1671179360775/work
 charset-normalizer @ file:///home/conda/feedstock_root/build_artifacts/charset-normalizer_1678108872112/work
 click==7.1.2
+coloredlogs==15.0.1
 comm==0.1.3
 contourpy==1.0.7
 croniter==1.3.14
@@ -33,11 +34,15 @@ debugpy==1.6.7
 decorator==5.1.1
 deepdiff==6.3.0
 dill==0.3.6
+docstring-parser==0.15
+einops==0.6.1
+eleuther-elk==0.1
 exceptiongroup==1.1.1
 executing==1.2.0
 fastapi==0.88.0
 filelock @ file:///home/conda/feedstock_root/build_artifacts/filelock_1681839547898/work
 flake8==6.0.0
+focal-loss-torch==0.1.2
 fonttools==4.39.4
 frozenlist==1.3.3
 fsspec==2023.5.0
@@ -46,6 +51,7 @@ GitPython==3.1.31
 gmpy2 @ file:///home/conda/feedstock_root/build_artifacts/gmpy2_1666808679441/work
 h11==0.14.0
 huggingface-hub==0.14.1
+humanfriendly==10.0
 idna @ file:///home/conda/feedstock_root/build_artifacts/idna_1663625384323/work
 importlib-metadata==6.6.0
 importlib-resources==5.12.0
@@ -79,25 +85,27 @@ mpmath @ file:///home/conda/feedstock_root/build_artifacts/mpmath_1678228039184/
 multidict==6.0.4
 multiprocess==0.70.14
 multivolumefile==0.2.3
-mypy-extensions==1.0.0
+mypy-extensions @ file:///home/conda/feedstock_root/build_artifacts/mypy_extensions_1675543315189/work
 nest-asyncio==1.5.6
 networkx @ file:///home/conda/feedstock_root/build_artifacts/networkx_1680692919326/work
-numpy @ file:///home/conda/feedstock_root/build_artifacts/numpy_1682210190296/work
+numpy==1.25.2
+optimum==1.8.6
 ordered-set==4.1.0
-packaging==23.1
+packaging @ file:///home/conda/feedstock_root/build_artifacts/packaging_1681337016113/work
 pandas==2.0.1
 parso==0.8.3
-pathspec==0.11.1
+pathspec @ file:///home/conda/feedstock_root/build_artifacts/pathspec_1678853982175/work
 peft @ git+https://github.com/huggingface/peft.git@3714aa2fff158fdfa637b2b65952580801d890b2
 pexpect==4.8.0
 pickleshare==0.7.5
 Pillow @ file:///home/conda/feedstock_root/build_artifacts/pillow_1675487166627/work
-platformdirs==3.5.1
+platformdirs @ file:///home/conda/feedstock_root/build_artifacts/platformdirs_1683850015520/work
 plotly==5.14.1
 pluggy==1.0.0
+prettytable==3.8.0
 prompt-toolkit==3.0.38
 promptsource==0.2.3
-protobuf==4.23.1
+protobuf==3.20.3
 psutil==5.9.5
 ptyprocess==0.7.0
 pure-eval==0.2.2
@@ -112,9 +120,11 @@ pydeck==0.8.1b0
 pyflakes==3.0.1
 Pygments==2.15.1
 PyJWT==2.7.0
+pynvml==11.5.0
 pyOpenSSL @ file:///home/conda/feedstock_root/build_artifacts/pyopenssl_1680037383858/work
 pyparsing==3.0.9
 pyppmd==1.0.0
+pyre-extensions==0.0.29
 pyrsistent==0.19.3
 PySocks @ file:///home/conda/feedstock_root/build_artifacts/pysocks_1661604839144/work
 pytest==7.3.1
@@ -122,6 +132,7 @@ python-dateutil==2.8.2
 python-editor==1.0.4
 python-multipart==0.0.6
 pytorch-lightning==2.0.2
+pytorch-optimizer==2.10.1
 pytz==2023.3
 PyYAML==6.0
 pyzmq==25.0.2
@@ -134,12 +145,14 @@ rich==13.3.5
 safetensors==0.3.1
 scikit-learn==1.2.2
 scipy==1.10.1
-sentencepiece==0.1.99
+sentencepiece==0.1.97
+simple-parsing==0.1.4
 six==1.16.0
 sklearn==0.0.post5
 smmap==5.0.0
 sniffio==1.3.0
 soupsieve==2.4.1
+-e git+https://github.com/wassname/discovering_latent_knowledge.git@43074f79cbb58c735ff1befab81f28811831509b#egg=src
 stack-data==0.6.2
 starlette==0.22.0
 starsessions==1.3.0
@@ -160,8 +173,9 @@ torchvision==0.15.2
 tornado==6.3.2
 tqdm==4.65.0
 traitlets==5.9.0
-transformers @ git+https://github.com/huggingface/transformers.git@17a55534f5e5df10ac4804d4270bf6b8cc24998d
+transformers==4.30.1
 triton==2.0.0
+typing-inspect==0.9.0
 typing_extensions @ file:///home/conda/feedstock_root/build_artifacts/typing_extensions_1678559861143/work
 tzdata==2023.3
 tzlocal==5.0.1
@@ -173,6 +187,7 @@ wcwidth==0.2.6
 websocket-client==1.5.1
 websockets==11.0.3
 widgetsnbextension==4.0.7
+xformers==0.0.20
 xxhash==3.2.0
 yarl==1.9.2
 zipp==3.15.0

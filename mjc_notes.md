@@ -1071,8 +1071,22 @@ Wires it up a bit more. Now I need to debug. For example my chosen asnwers are o
 # 2023-08-27 13:38:33
 
 So I got a dataset I want to
-- try training a prob on probs
+- try training a probe on probs
 - try training a probe on expnses probs
 - look at diff between probs and expanded probs
 - looks at llm acc by dataset, lie by dataset, prob acc by dataset
 - finally look at generaliation
+
+
+results are :poop: 
+
+Maybe with multiple mc dropout iteractions it would be easier? I could even do it at test time with voting?
+Or multi ranking?
+
+What if I remove one's it can't do. Then how do I know
+
+# 2023-08-31 08:21:38
+
+- with new dataset we can remove unsure
+- maybe I can try multiple mc dropout iteractions... esp by combining dataset
+- test time ranking? multi dropouts?
