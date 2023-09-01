@@ -1090,3 +1090,53 @@ What if I remove one's it can't do. Then how do I know
 - with new dataset we can remove unsure
 - maybe I can try multiple mc dropout iteractions... esp by combining dataset
 - test time ranking? multi dropouts?
+- read more about mcdropout... there might be other interventions that are better :)
+
+- ds
+- polarity '../.ds/HuggingFaceH4starchat_beta_amazon_polarity_train_12002'
+- '../.ds/HuggingFaceH4starchat_beta_imdb_train_12002'
+
+twitter conv https://twitter.com/GreatKingCnut/status/1696862086205473009
+
+Experiment: expanded token def... 0.66 anyway
+Experiment: going from mse to margin improved acc 0.66 or 60->0.68% as well
+Experiment: removing the 30% of rows it can't answer 0.74%? (nb 0.24)
+Experiment: group neurons to prevent overfitting?
+
+Question: LLama does not have dropout. alternatives to MCDropout?
+
+What about conv? not over width, but over depth?
+
+hs size is batch, neurons, layers
+I am running conv on this so [b, neurons=features, layers=spatial]. So yes that's interesting.
+torch.Size([120, 6144, 37])
+
+How to I make it not overfit? Maybe I split into sections?
+The layer dimension is an actual dimension... but the others are arbitrary.
+
+What about:
+- torch.Size([120, 1, 6144, 37])
+- Conv2d(1, 3, (1, 3))
+- torch.Size([120, 3, 6144, 35])
+- - Conv2d(1, 30, (10, 1))
+- AvgPool!
+- NN
+- but this means we can only look at neurons in the same column... and that's meaningless
+
+Really I care about the 6144x6144 connections between layers.
+
+# 2023-09-01 14:40:53 back to the drawing board
+
+This twitter conv twitter conv https://twitter.com/GreatKingCnut/status/1696862086205473009
+
+made me think monte carlo dropout might not provide the information needed. But what about the gradient? 
+
+Let me think how to set this up. So let's say we know:
+- hs: the hidden states for each neuron
+- dhs: the gradient for each neuron with respect to
+  - the opposite answer? I guess this adds another dimension
+  - the truth? but that leaks info
+
+
+
+But if we give it the gradient from the loss, if that has the rigth answer in then it's data leakage and wont work during deployment
