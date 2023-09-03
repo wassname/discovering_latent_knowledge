@@ -21,7 +21,7 @@ from elk.extraction.balanced_sampler import BalancedSampler, FewShotSampler
 # Local path to the folder containing the templates
 TEMPLATES_FOLDER_PATH = Path(__file__).parent / "templates"
 
-def load_prompt_structure(path='structure.yaml', prompt_format='chatml'):
+def load_prompt_structure(path='structure.yaml', prompt_format='llama'):
     f = TEMPLATES_FOLDER_PATH / path
     yaml_dict = yaml.load(f.open('r'), Loader=yaml.FullLoader)
     templates = yaml_dict["templates"]

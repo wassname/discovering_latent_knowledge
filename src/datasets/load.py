@@ -28,10 +28,10 @@ def ds2df(ds, cols=None):
     df = pd.DataFrame([rows_item(r) for r in df])
     
     # derived
-    df['dir_true'] = df['ans1'] - df['ans0']
-    df['conf'] = (df['ans0']-df['ans1']).abs()  
-    df['llm_prob'] = (df['ans0']+df['ans1'])/2
-    df['llm_ans'] = df['llm_prob']>0.5
+    df['dir_true'] = df['ans0']
+    # df['conf'] = (df['ans0']).abs9)
+    # df['llm_prob'] = (df['ans0']+df['ans1'])/2
+    df['llm_ans'] = df['ans0']>0.5
     # df['desired_ans'] = df.label ^ df.lie
     return df
 
