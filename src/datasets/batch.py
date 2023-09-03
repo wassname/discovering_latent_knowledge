@@ -22,7 +22,7 @@ def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, mcdropout
     """
     ehs = ExtractHiddenStates(model, tokenizer)
     
-    torch_cols = ['input_ids', 'attention_mask']
+    torch_cols = ['input_ids', 'attention_mask', 'choice_ids']
     ds_t_subset = ds_keep_cols(data, torch_cols)
     ds_t_subset.set_format(type='torch')
     
@@ -31,23 +31,12 @@ def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, mcdropout
     
     dl = DataLoader(ds_t_subset, batch_size=batch_size, shuffle=False)
     for i, batch in enumerate(tqdm(dl, desc='get hidden states')):
-        input_ids, attention_mask =  batch["input_ids"], batch["attention_mask"]
+        input_ids, attention_mask, choice_ids =  batch["input_ids"], batch["attention_mask"], batch["choice_ids"]
         nn = len(input_ids)
         index = i*batch_size+np.arange(nn)
         
         # different due to dropout
-        hs0 = ehs.get_batch_of_hidden_states(input_ids=input_ids, attention_mask=attention_mask, use_mcdropout=mcdropout)
-        if mcdropout:
-            hs1 = ehs.get_batch_of_hidden_states(input_ids=input_ids, attention_mask=attention_mask, use_mcdropout=mcdropout)
-            
-            # QC
-            if i==0:
-                eps=1e-5
-                mpe = lambda x,y: np.mean(np.abs(x-y)/(np.abs(x)+np.abs(y)+eps))
-                a,b=hs1['hidden_states'],hs0['hidden_states']
-                assert mpe(a,b)>eps, "the hidden state pairs should be different but are not. Check model.config.use_cache==False, check this model has dropout in it's arch"
-        else:
-            hs1 = hs0
+        hs0 = ehs.get_batch_of_hidden_states(input_ids=input_ids, attention_mask=attention_mask, use_mcdropout=mcdropout, choice_ids=choice_ids)
 
         
         for j in range(nn):
@@ -60,8 +49,8 @@ def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, mcdropout
                 hs0=float_to_int16(torch.from_numpy(hs0['hidden_states'][j])),
                 scores0=hs0["scores"][j],
                 
-                hs1=float_to_int16(torch.from_numpy(hs1['hidden_states'][j])),
-                scores1=hs1["scores"][j],                    
+                # hs1=float_to_int16(torch.from_numpy(hs1['hidden_states'][j])),
+                # scores1=hs1["scores"][j],                    
                 
                 ds_index=index[j],
                 

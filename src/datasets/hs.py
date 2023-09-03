@@ -13,10 +13,10 @@ from transformers import (
 )
 from typing import Optional, List, Tuple, Dict
 from transformers import LogitsProcessorList
-
+import functools
 from src.helpers.torch import to_numpy
 from src.datasets.dropout import enable_dropout
-
+import re
 
 from tqdm.auto import tqdm
 # from src.datasets.hs import ExtractHiddenStates
@@ -25,6 +25,23 @@ from datasets import Dataset
 import numpy as np
 import torch
 import torch.nn.functional as F
+from src.datasets.scores import choice2id, choice2ids
+
+
+def get_gradients(model: PreTrainedModel, outputs, token_y, token_n):
+    model.zero_grad()
+    assert token_y.shape[1]<2, 'FIXME just use the first token for now'
+    score_y = torch.index_select(outputs["scores"], 1, token_y[:, 0])
+    score_n = torch.index_select(outputs["scores"], 1, token_n[:, 0])
+    # score_n = outputs["scores"][:, token_n]
+    pred = score_y - score_n
+    loss = F.mse_loss(pred, -pred)
+    loss.backward()
+    ps = model.named_parameters()
+    grads = {n:g.grad.cpu() for n,g in ps if g.grad is not None}
+    model.zero_grad()
+    # model.eval()
+    return grads
 
 
 @dataclass
@@ -41,6 +58,7 @@ class ExtractHiddenStates:
         input_text: Optional[List[str]] = None,
         input_ids: torch.Tensor = None,
         attention_mask: Optional[torch.Tensor] = None,
+        choice_ids: List[torch.Tensor] = None,
         truncation_length=999,
         use_mcdropout=True,
         debug=False,
@@ -62,49 +80,49 @@ class ExtractHiddenStates:
             )
             input_ids = t.input_ids.to(self.model.device)
             attention_mask = t.attention_mask.to(self.model.device)
+        else:
+            input_ids = input_ids.to(self.model.device)
+            attention_mask = attention_mask.to(self.model.device)
+        choice_ids = choice_ids.to(self.model.device)
 
         # forward pass
         last_token = -1
-        with torch.no_grad():
-            input_ids = input_ids.to(self.model.device)
-            
-            self.model.eval()
-            if use_mcdropout:
-                enable_dropout(self.model, use_mcdropout)
+        
+        self.model.train()
 
-            # Forward for one step is the same as greedy generation for one step
-            # https://github.com/huggingface/transformers/blob/234cfefbb083d2614a55f6093b0badfb2efc3b45/src/transformers/generation_utils.py#L1528
-            model_inputs = self.model.prepare_inputs_for_generation(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
-            outputs = self.model.forward(
-                **model_inputs,
-                return_dict=True,
-                output_hidden_states=True,
-            )
-            
-            # next_token_logits = outputs.logits[:, -1, :]
+        # Forward for one step is the same as greedy generation for one step
+        # https://github.com/huggingface/transformers/blob/234cfefbb083d2614a55f6093b0badfb2efc3b45/src/transformers/generation_utils.py#L1528
+        model_inputs = self.model.prepare_inputs_for_generation(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
+        outputs = self.model.forward(
+            **model_inputs,
+            return_dict=True,
+            output_hidden_states=True,
+        )
 
-            # # pre-process distribution
-            # next_token_scores = logits_processor(input_ids, next_token_logits)
-            # next_token_scores = logits_warper(input_ids, next_token_scores)
-            # probs = nn.functional.softmax(next_token_scores, dim=-1)
+        outputs["scores"] = outputs.logits[:, last_token, :]
 
-            outputs["scores"] = outputs.logits[:, last_token, :]
-
-            layers = self.get_layer_selection(outputs)
-            
-            hidden_states = torch.stack(
-                [outputs["hidden_states"][i] for i in layers], 1
-            )
-            # (batch, layers, past_seq, logits) take just the last token so they are same size
-            hidden_states = hidden_states[
-                :, :, last_token
-            ]  
-
+        layers = self.get_layer_selection(outputs)
+        token_n = choice_ids[:, 0] # [batch, tokens]
+        token_y = choice_ids[:, 1]
+        grads_all = get_gradients(self.model, outputs, token_y, token_n)
+        p = ".+mlp.c_proj.weight" # get the last weight of each layer (ignore bias)
+        # p = ".+mlp.c_proj.bias" # get the last weight of each layer
+        grads = torch.stack([g.mean(1).float() for k,g in grads_all.items() if re.match(p, k)])
+        
+        hidden_states = torch.stack(
+            [outputs["hidden_states"][i] for i in layers], 1
+        )
+        # (batch, layers, past_seq, logits) take just the last token so they are same size
+        hidden_states = hidden_states[
+            :, :, last_token
+        ]         
+ 
         out = dict(
             hidden_states=hidden_states,
             scores=outputs["scores"],
             input_ids=input_ids,
             layers=layers,
+            grads = grads,
         )
         out = {k: to_numpy(v) for k, v in out.items()}
         if debug:            

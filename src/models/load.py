@@ -24,19 +24,19 @@ def load_model(model_repo = "HuggingFaceH4/starchat-beta", lora_repo=None, verbo
     # elif "llama" in model_repo:
     #     model, tokenizer = load_llama(model_repo=model_repo, lora_repo=lora_repo)
     else:
-        raise NotImplementedError(f"model_repo {model_repo} not found")
+        raise NotImplementedError(f"code for model_repo {model_repo} not found")
     
     if verbose: print(model.config)
 
     assert check_for_dropout(model), 'model should have dropout'
     return model, tokenizer
 
-def load_starchat(model_repo = "HuggingFaceH4/starchat-beta"):
+def load_starchat(model_repo = "HuggingFaceH4/starchat-beta", load_in_4bit=True, torch_dtype=torch.float16):
     # see https://github.com/deep-diver/LLM-As-Chatbot/blob/main/models/starchat.py
     model_options = dict(
         device_map="auto",
-        load_in_4bit=True,
-        torch_dtype=torch.float16, # note because datasets pickles the model into numpy to get the unique datasets name, and because numpy doesn't support bfloat16, we need to use float16
+        load_in_4bit=load_in_4bit,
+        torch_dtype=torch_dtype, # note because datasets pickles the model into numpy to get the unique datasets name, and because numpy doesn't support bfloat16, we need to use float16
         use_safetensors=False,
     )
 

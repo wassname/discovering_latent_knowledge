@@ -1041,7 +1041,7 @@ But wait, how much does the preamble contribute to the lies, and how much does t
 
 # 2023-08-25 08:59:59
 
-On discord someone point out that my approach of taking deception as: wrong answer where it could otherwise answer them has a flaw. What if you then increase the answer with CoT/MultiShot/better prompting. Then it turns out it could answer all along, it's just that your prompting was confusing. The examples where this is true seem to be a case of the model being confused, rather than deceptive.
+On discord someone pointed that my approach of taking deception as: wrong answer where it could otherwise answer them has a flaw. What if you then increase the answer with CoT/MultiShot/better prompting. Then it turns out it could answer all along, it's just that your prompting was confusing. The examples where this is true seem to be a case of the model being confused, rather than deceptive.
 
 We have these categories of examples:
 - that it can always solve "sentiment of terrible"
@@ -1140,3 +1140,50 @@ Let me think how to set this up. So let's say we know:
 
 
 But if we give it the gradient from the loss, if that has the rigth answer in then it's data leakage and wont work during deployment
+
+Hmm it's not so easy as there are many layers. And each is huge. I may need to use captum.
+
+maybe one of these techniques
+- https://captum.ai/api/neuron.html#neuron-guided-backprop omputes the gradient of the target neuron with respect to the input
+- https://captum.ai/api/neuron.html#neuron-gradient   output of a particular neuron with respect to the inputs of the network.
+
+I may need to modify a method! https://github.com/pytorch/captum/blob/master/captum/_utils/gradient.py
+
+
+# 2023-09-02 12:41:43
+Problem: how to actually get gradioents?
+- [ ] Counterfactual? 
+  - what is it?   
+  - Counterfactuals, hypothetical examples that show people how to obtain a different prediction.
+- [ ] Neuron attribution? I would need to change from input to output
+  - [ ] Can I find a simple repo?
+  - somehow they schoe input or output  Computes the gradient of the output of a particular neuron with respect to the inputs of the network.
+
+torch.autograd.grad 
+
+OK it's too hard how about this
+
+- just do each layer
+- just do the last MLP
+- and it's output neurons (need to work out how to do this... maybe reshape them sum over input?)
+
+
+For having gradient I need bf16, which is 4x as large. That means I cannot fit a 15B model like starcoder. Which 7b model to try?
+- https://huggingface.co/digitalpipelines/llama2_7b_chat_uncensored
+- https://huggingface.co/WizardLM/WizardCoder-Python-7B-V1.0
+
+there is also the 3b and 1b coding models
+- https://huggingface.co/WizardLM/WizardCoder-3B-V1.0
+- https://huggingface.co/WizardLM/WizardCoder-1B-V1.0
+
+# which layers... this is an interesting choice
+
+https://www.lesswrong.com/posts/kuQfnotjkQA4Kkfou/inference-time-intervention-eliciting-truthful-answers-from?commentId=bzJpeGjbEDAKDdJiX
+
+  They use train a linear probe on the for the activations of every attention head (post attention, pre W^O multiplication) to classify T vs F example answers. They see which attention heads they can successfully learn a probe at. They select the top 48 attention heads (by classifier accuracy).
+
+  For each of these heads they choose a “truthful direction” based on the difference of means between T and F example answers. (Or by using the direction orthogonal to the probe, but diff of means performs better.)
+
+This is interesting as they do not use hidden states. They use attention head outputs hmm
+
+then they only take the top 48 attentions heads, and only direction
