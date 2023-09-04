@@ -1193,3 +1193,13 @@ then they only take the top 48 attentions heads, and only direction
 So I have it making a dataset. I still need to work out the label. And I need a large sample.
 
 But the worst thing is I've got from 15B models with a batch of 10, to 3B models with a batch of 1 (1/50x). Just by going from 4bit to 16 (4x) but also adding gradient/graph (contributed 10x?).
+
+# 2023-09-04 06:29:58
+
+A quick linear probe gets 77% acc on test set. hmm
+
+
+hmm los of interesting stuff in this code https://github.com/likenneth/honest_llama/blob/master/utils.py#L17
+- datasets
+- models
+- getting hidden states

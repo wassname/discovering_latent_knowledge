@@ -107,7 +107,13 @@ class ExtractHiddenStates:
         grads_all = get_gradients(self.model, outputs, token_y, token_n)
         p = ".+mlp.c_proj.weight" # get the last weight of each layer (ignore bias)
         # p = ".+mlp.c_proj.bias" # get the last weight of each layer
-        grads = torch.stack([g.mean(1).float() for k,g in grads_all.items() if re.match(p, k)])
+        grads_mlp = torch.stack([g.mean(1).float() for k,g in grads_all.items() if re.match(p, k)])
+        
+        p = ".+attn.c_proj.weight" # get the last weight of each layer (ignore bias)
+        grads_attn = torch.stack([g.mean(0).float() for k,g in grads_all.items() if re.match(p, k)])
+        
+        p = ".+mlp.c_fc.weight" # get the last weight of each layer (ignore bias)
+        grads_mlp_cfc = torch.stack([g.mean(0).float() for k,g in grads_all.items() if re.match(p, k)])
         
         hidden_states = torch.stack(
             [outputs["hidden_states"][i] for i in layers], 1
@@ -122,7 +128,9 @@ class ExtractHiddenStates:
             scores=outputs["scores"],
             input_ids=input_ids,
             layers=layers,
-            grads = grads,
+            grads_attn = grads_attn,
+            grads_mlp=grads_mlp,
+            grads_mlp_cfc=grads_mlp_cfc,
         )
         out = {k: to_numpy(v) for k, v in out.items()}
         if debug:            
