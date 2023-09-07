@@ -25,24 +25,22 @@ from datasets import Dataset
 import numpy as np
 import torch
 import torch.nn.functional as F
+from baukit import Trace, TraceDict
 from src.datasets.scores import choice2id, choice2ids
 
-
-def get_gradients(model: PreTrainedModel, outputs, token_y, token_n):
+def counterfactual_backwards(model, scores, token_y, token_n):
+    """do a backwards pass where the loss is the distance to the opposite scores"""
     model.zero_grad()
     assert token_y.shape[1]<2, 'FIXME just use the first token for now'
-    score_y = torch.index_select(outputs["scores"], 1, token_y[:, 0])
-    score_n = torch.index_select(outputs["scores"], 1, token_n[:, 0])
-    # score_n = outputs["scores"][:, token_n]
+    score_y = torch.index_select(scores, 1, token_y[:, 0])
+    score_n = torch.index_select(scores, 1, token_n[:, 0])
     pred = score_y - score_n
-    loss = F.mse_loss(pred, -pred)
+    loss = F.l1_loss(pred, -pred)
     loss.backward()
-    ps = model.named_parameters()
-    grads = {n:g.grad.cpu() for n,g in ps if g.grad is not None}
-    model.zero_grad()
-    # model.eval()
-    return grads
 
+def stack_trace_returns(ret: TraceDict, HEADS: List[str]) -> torch.Tensor:
+    hs = [ret[head].output.squeeze().detach().float().cpu() for head in HEADS]
+    return torch.stack(hs, dim=0).squeeze().numpy()[:, -1]
 
 @dataclass
 class ExtractHiddenStates:
@@ -87,50 +85,45 @@ class ExtractHiddenStates:
 
         # forward pass
         last_token = -1
-        
+        HEADS = [f"transformer.h.{i}.attn.c_proj" for i in range(self.model.config.num_hidden_layers)]
+        MLPS = [f"transformer.h.{i}.mlp" for i in range(self.model.config.num_hidden_layers)]
         self.model.train()
+        with TraceDict(self.model, HEADS+MLPS, retain_grad=True) as ret:
+            with torch.autocast('cuda'): # FIXME not reccomended for backwards pass
+                # Forward for one step is the same as greedy generation for one step
+                # https://github.com/huggingface/transformers/blob/234cfefbb083d2614a55f6093b0badfb2efc3b45/src/transformers/generation_utils.py#L1528
+                model_inputs = self.model.prepare_inputs_for_generation(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
+                outputs = self.model.forward(
+                    **model_inputs,
+                    return_dict=True,
+                    output_hidden_states=True,
+                )
+                scores = outputs["scores"] = outputs.logits[:, last_token, :]
+                token_n = choice_ids[:, 0] # [batch, tokens]
+                token_y = choice_ids[:, 1]
+            counterfactual_backwards(self.model, scores, token_y, token_n)
 
-        # Forward for one step is the same as greedy generation for one step
-        # https://github.com/huggingface/transformers/blob/234cfefbb083d2614a55f6093b0badfb2efc3b45/src/transformers/generation_utils.py#L1528
-        model_inputs = self.model.prepare_inputs_for_generation(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
-        outputs = self.model.forward(
-            **model_inputs,
-            return_dict=True,
-            output_hidden_states=True,
-        )
 
-        outputs["scores"] = outputs.logits[:, last_token, :]
-
+        # stack
+        hidden_states = torch.stack(outputs.hidden_states, dim=0).squeeze()
+        hidden_states = hidden_states.detach().float().cpu().numpy()[:, last_token]
+        head_wise_hidden_states = stack_trace_returns(ret, HEADS)
+        mlp_wise_hidden_states = stack_trace_returns(ret, MLPS)
+        
+        # select only some layers
         layers = self.get_layer_selection(outputs)
-        token_n = choice_ids[:, 0] # [batch, tokens]
-        token_y = choice_ids[:, 1]
-        grads_all = get_gradients(self.model, outputs, token_y, token_n)
-        p = ".+mlp.c_proj.weight" # get the last weight of each layer (ignore bias)
-        # p = ".+mlp.c_proj.bias" # get the last weight of each layer
-        grads_mlp = torch.stack([g.mean(1).float() for k,g in grads_all.items() if re.match(p, k)])
-        
-        p = ".+attn.c_proj.weight" # get the last weight of each layer (ignore bias)
-        grads_attn = torch.stack([g.mean(0).float() for k,g in grads_all.items() if re.match(p, k)])
-        
-        p = ".+mlp.c_fc.weight" # get the last weight of each layer (ignore bias)
-        grads_mlp_cfc = torch.stack([g.mean(0).float() for k,g in grads_all.items() if re.match(p, k)])
-        
-        hidden_states = torch.stack(
-            [outputs["hidden_states"][i] for i in layers], 1
-        )
-        # (batch, layers, past_seq, logits) take just the last token so they are same size
-        hidden_states = hidden_states[
-            :, :, last_token
-        ]         
- 
+        head_wise_hidden_states = head_wise_hidden_states[layers]
+        mlp_wise_hidden_states = mlp_wise_hidden_states[layers]
+        hidden_states = hidden_states[layers]
+
+        # collect outputs
         out = dict(
             hidden_states=hidden_states,
             scores=outputs["scores"],
             input_ids=input_ids,
             layers=layers,
-            grads_attn = grads_attn,
-            grads_mlp=grads_mlp,
-            grads_mlp_cfc=grads_mlp_cfc,
+            grads_attn = head_wise_hidden_states,
+            grads_mlp=mlp_wise_hidden_states,
         )
         out = {k: to_numpy(v) for k, v in out.items()}
         if debug:            
@@ -146,7 +139,7 @@ class ExtractHiddenStates:
 
         See https://www.lesswrong.com/posts/bWxNPMy5MhPnQTzKz/what-discovering-latent-knowledge-did-and-did-not-find-4
         """
-        return range(
+        return torch.arange(
             self.layer_padding,
             len(outputs["hidden_states"]) - self.layer_padding,
             self.layer_stride,

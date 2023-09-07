@@ -49,7 +49,7 @@ def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, mcdropout
                 hs0=float_to_int16(torch.from_numpy(hs0['hidden_states'][j])),
                 scores0=hs0["scores"][j],
                 grads_mlp0=hs0['grads_mlp'][j],
-                grads_mlp_cfc0=hs0['grads_mlp_cfc'][j],
+                # grads_mlp_cfc0=hs0['grads_mlp_cfc'][j],
                 grads_attn0=hs0['grads_attn'][j],
                 
                 # hs1=float_to_int16(torch.from_numpy(hs1['hidden_states'][j])),
