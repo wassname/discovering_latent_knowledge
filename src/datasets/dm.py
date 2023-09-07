@@ -14,7 +14,7 @@ def compute_distance(df):
     return distance
 
 to_tensor = lambda x: torch.from_numpy(x).float()
-to_ds = lambda hs0, hs1, y: TensorDataset(to_tensor(hs0), to_tensor(hs1), to_tensor(y))
+to_ds = lambda hs0, y: TensorDataset(to_tensor(hs0), to_tensor(y))
 
 class imdbHSDataModule(pl.LightningDataModule):
 
@@ -31,21 +31,21 @@ class imdbHSDataModule(pl.LightningDataModule):
         
         # extract data set into N-Dim tensors and 1-d dataframe
         self.ds_hs = (
-            self.ds.select_columns(['hs0', 'hs1'])
+            self.ds.select_columns(['grads_mlp0'])
             .with_format("numpy")
         )
-        self.df = ds2df(self.ds)
+        df = self.df = ds2df(self.ds)
         
-        y_cls = compute_distance(self.df)
+        y_cls = y = df['label_true'] == df['llm_ans']
         
         self.y = y_cls.values
         self.df['y'] = y_cls
         
         b = len(self.ds_hs)
-        self.hs0 = self.ds_hs['hs0'].transpose(0, 2, 1)
-        self.hs1 = self.ds_hs['hs1'].transpose(0, 2, 1)
+        self.hs0 = self.ds_hs['grads_mlp0']#.transpose(0, 2, 1)
+        # self.hs1 = self.ds_hs['hs1'].transpose(0, 2, 1)
         self.ans0 = self.df['ans0'].values
-        self.ans1 = self.df['ans1'].values
+        # self.ans1 = self.df['ans1'].values
 
         # let's create a simple 50/50 train split (the data is already randomized)
         n = len(self.y)
@@ -55,7 +55,7 @@ class imdbHSDataModule(pl.LightningDataModule):
             'test': (int(n * 0.75), n),
         }
         
-        self.datasets = {key: to_ds(self.hs0[start:end], self.hs1[start:end], self.y[start:end]) for key, (start, end) in self.splits.items()}
+        self.datasets = {key: to_ds(self.hs0[start:end], self.y[start:end]) for key, (start, end) in self.splits.items()}
 
     def create_dataloader(self, ds, shuffle=False):
         return DataLoader(ds, batch_size=self.hparams.batch_size, drop_last=False, shuffle=shuffle)

@@ -1203,3 +1203,23 @@ hmm los of interesting stuff in this code https://github.com/likenneth/honest_ll
 - datasets
 - models
 - getting hidden states
+
+# 2023-09-05 18:30:16
+
+OK wow using the mlp grads gets 80%
+
+plus I think I only used one layer :bug:
+
+plus there are other ideas! Like flipping the sign of the label and grad
+like hidden states plus grad
+like 2 hidden states, some from updating weights then inference?
+
+using this https://github.com/davidbau/baukit/blob/main/baukit/nethook.py
+
+# 2023-09-07 12:28:02
+
+- [ ] multi layers
+- [ ] use nethook
+- [ ] think of ways to make the pair clear but also low mem use...
+  - gradients add a lot. so can I reverse some heads?
+  - should I update virtual weights and run again? with no grad? that would be clear. how much grad would it use... maybe not much
