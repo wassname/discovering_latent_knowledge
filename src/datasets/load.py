@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-from datasets import load_dataset
+import torch
+from datasets import load_dataset, load_from_disk
 from src.helpers.typing import int16_to_float, float_to_int16
 
 def rows_item(row):
@@ -36,5 +37,6 @@ def ds2df(ds, cols=None):
     return df
 
 def load_ds(f):
-    ds = load_dataset(f)
-    return ds.map(lambda x: {'hs0': int16_to_float(x['hs0']), 'hs1': int16_to_float(x['hs1'])})
+    ds = load_from_disk(f)
+    ks = ds['large_arrays_keys'][0]
+    return ds.map(lambda x: {k: int16_to_float(torch.from_numpy(ds[k])) for k in ks})

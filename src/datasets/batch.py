@@ -44,18 +44,26 @@ def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, mcdropout
             k = i*batch_size + j
             info = ds_p_subset[k]
             
+            large_arrays_keys = [k for k,v in hs0.items() if v.ndim>2]
+            large_arrays_as_int16 = {
+                k:float_to_int16(torch.from_numpy(hs0[k][j])) 
+                for k in large_arrays_keys}
+            
             yield dict(
-                # int16 makes our storage much smaller
-                hs0=float_to_int16(torch.from_numpy(hs0['hidden_states'][j])),
+                
+                large_arrays_keys=large_arrays_keys,
                 scores0=hs0["scores"][j],
-                grads_mlp0=hs0['grads_mlp'][j],
+                # grads_mlp0=hs0['grads_mlp'][j],
                 # grads_mlp_cfc0=hs0['grads_mlp_cfc'][j],
-                grads_attn0=hs0['grads_attn'][j],
+                # grads_attn0=hs0['grads_attn'][j],
                 
                 # hs1=float_to_int16(torch.from_numpy(hs1['hidden_states'][j])),
                 # scores1=hs1["scores"][j],                    
                 
                 ds_index=index[j],
+                
+                # int16 makes our storage much smaller
+                **large_arrays_as_int16,
                 
                 **info
             )

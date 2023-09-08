@@ -26,6 +26,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from baukit import Trace, TraceDict
+from einops import rearrange, reduce, repeat
 from src.datasets.scores import choice2id, choice2ids
 
 def counterfactual_backwards(model, scores, token_y, token_n):
@@ -38,10 +39,19 @@ def counterfactual_backwards(model, scores, token_y, token_n):
     loss = F.l1_loss(pred, -pred)
     loss.backward()
 
-def stack_trace_returns(ret: TraceDict, HEADS: List[str]) -> torch.Tensor:
-    hs = [ret[head].output.squeeze().detach().float().cpu() for head in HEADS]
-    return torch.stack(hs, dim=0).squeeze().numpy()[:, -1]
+def stack_trace_returns(ret: TraceDict, names: List[str]) -> torch.Tensor:
+    hs = [ret[h].output for h in names]
+    return rearrange(hs, 'layers b s hs -> b layers s hs')[:, :, -1]
 
+def stack_trace_grad_returns(ret: TraceDict, names: List[str]) -> torch.Tensor:
+    hs = [ret[h].output.grad for h in names]
+    return rearrange(hs, 'layers b s hs -> b layers s hs')[:, :, -1]
+
+def select_weight_grads(weight_grads: Dict[str, torch.Tensor], pattern:str= ".+attn.c_proj.weight", mean_axis:int=1):
+    grads = [g.mean(mean_axis) for k,g in weight_grads.items() if re.match(pattern, k)]
+    assert len(grads), f"non of pattern='{pattern}' found in {weight_grads.keys()}"
+    return rearrange(grads, "lyrs b hs -> b lyrs hs")
+        
 @dataclass
 class ExtractHiddenStates:
     
@@ -101,29 +111,68 @@ class ExtractHiddenStates:
                 scores = outputs["scores"] = outputs.logits[:, last_token, :]
                 token_n = choice_ids[:, 0] # [batch, tokens]
                 token_y = choice_ids[:, 1]
-            counterfactual_backwards(self.model, scores, token_y, token_n)
-
+                
+            counterfactual_backwards(self.model, scores, token_y, token_n)  
+            
+            
+            ps = self.model.named_parameters()
+            weight_grads = {n:g.grad.detach().float().cpu()[None, :] for n,g in ps if g.grad is not None} 
+        self.model.zero_grad()
 
         # stack
-        hidden_states = torch.stack(outputs.hidden_states, dim=0).squeeze()
-        hidden_states = hidden_states.detach().float().cpu().numpy()[:, last_token]
-        head_wise_hidden_states = stack_trace_returns(ret, HEADS)
-        mlp_wise_hidden_states = stack_trace_returns(ret, MLPS)
+        hidden_states = list(outputs.hidden_states)
+        hidden_states = rearrange(hidden_states, 'lyrs b seq hs -> b lyrs seq hs')[:, :, last_token]
+        ## from ret, we get the layer activation and the grads on them
+        head_activation = stack_trace_returns(ret, HEADS)
+        mlp_activation = stack_trace_returns(ret, MLPS)
+        head_activation_grads = stack_trace_grad_returns(ret, HEADS)
+        mlp_activation_grads = stack_trace_grad_returns(ret, MLPS)
+        ## we also get the gradients on weights, as this might be a lower dimensional space than the grads on activations
+        
+        
+        p = ".+mlp.c_proj.weight" # get the last weight of each layer (ignore bias)
+        
+
+            
+        # rearrange([g.mean(1).float() for k,g in weight_grads.items() if re.match(p, k)])
+        # w_grads_mlp = torch.stack([g.mean(1).float() for k,g in weight_grads.items() if re.match(p, k)])
+        w_grads_mlp = select_weight_grads(weight_grads, pattern= ".+attn.c_proj.weight", mean_axis=1)
+        w_grads_attn = select_weight_grads(weight_grads, pattern= ".+attn.c_attn.weight", mean_axis=0)
+        w_grads_mlp_cfc = select_weight_grads(weight_grads, pattern= ".+mlp.c_fc.weight", mean_axis=0)
+        # p = ".+attn.c_proj.weight" # get the last weight of each layer (ignore bias)
+        # w_grads_attn = torch.stack([g.mean(0).float() for k,g in weight_grads.items() if re.match(p, k)])
+        # p = ".+mlp.c_fc.weight" # get the last weight of each layer (ignore bias)
+        # w_grads_mlp_cfc = torch.stack([g.mean(0).float() for k,g in weight_grads.items() if re.match(p, k)])
         
         # select only some layers
         layers = self.get_layer_selection(outputs)
-        head_wise_hidden_states = head_wise_hidden_states[layers]
-        mlp_wise_hidden_states = mlp_wise_hidden_states[layers]
-        hidden_states = hidden_states[layers]
+        head_activation = head_activation[:, layers]
+        mlp_activation = mlp_activation[:, layers]
+        head_activation_grads = head_activation_grads[:, layers]
+        mlp_activation_grads = mlp_activation_grads[:, layers]
+        hidden_states = hidden_states[:, layers]
+        
+        w_grads_mlp_cfc = w_grads_mlp_cfc[:, layers]
+        w_grads_attn = w_grads_attn[:, layers]
+        w_grads_mlp = w_grads_mlp[:, layers]
 
         # collect outputs
         out = dict(
-            hidden_states=hidden_states,
-            scores=outputs["scores"],
             input_ids=input_ids,
+            scores=outputs["scores"],
             layers=layers,
-            grads_attn = head_wise_hidden_states,
-            grads_mlp=mlp_wise_hidden_states,
+            
+            hidden_states=hidden_states,
+            
+            head_activation=head_activation,
+            mlp_activation=mlp_activation,
+            
+            head_activation_grads = head_activation_grads,
+            mlp_activation_grads=mlp_activation_grads,
+            
+            w_grads_mlp=w_grads_mlp,
+            w_grads_mlp_cfc=w_grads_mlp_cfc,
+            w_grads_attn=w_grads_attn,
         )
         out = {k: to_numpy(v) for k, v in out.items()}
         if debug:            

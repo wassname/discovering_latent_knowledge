@@ -1218,8 +1218,15 @@ using this https://github.com/davidbau/baukit/blob/main/baukit/nethook.py
 
 # 2023-09-07 12:28:02
 
-- [ ] multi layers
-- [ ] use nethook
+- [x] multi layers
+- [x] use nethook
 - [ ] think of ways to make the pair clear but also low mem use...
   - gradients add a lot. so can I reverse some heads?
-  - should I update virtual weights and run again? with no grad? that would be clear. how much grad would it use... maybe not much
+  - [ ] should I update virtual weights and run again? with no grad? that would be clear. how much grad would it use... maybe not much
+
+
+result of multi layers and tracedict...
+mlp 76%
+attn 75%
+
+previouslly I was extracting the grad on the weights. now it's the grad on the outputs/activations which seems better although perhaps harder to classify!
