@@ -38,5 +38,6 @@ def ds2df(ds, cols=None):
 
 def load_ds(f):
     ds = load_from_disk(f)
-    ks = ds['large_arrays_keys'][0]
-    return ds.map(lambda x: {k: int16_to_float(torch.from_numpy(ds[k])) for k in ks})
+    ks = [k for k,v in ds[0].items() if (v.dtype=='int64') and k not in ['ds_index']]
+    # ds = ds.map(lambda x: {k: int16_to_float(torch.from_numpy(ds[k]).long()) for k in ks})
+    return ds

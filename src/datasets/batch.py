@@ -27,7 +27,6 @@ def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, mcdropout
     ds_t_subset.set_format(type='torch')
     
     ds_p_subset = data.remove_columns(torch_cols)
-    # TODO check it has a few critical ones in
     
     dl = DataLoader(ds_t_subset, batch_size=batch_size, shuffle=False)
     for i, batch in enumerate(tqdm(dl, desc='get hidden states')):
@@ -46,19 +45,14 @@ def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, mcdropout
             
             large_arrays_keys = [k for k,v in hs0.items() if v.ndim>2]
             large_arrays_as_int16 = {
-                k:float_to_int16(torch.from_numpy(hs0[k][j])) 
+                # k:float_to_int16(hs0[k][j])
+                k:hs0[k][j] 
                 for k in large_arrays_keys}
             
             yield dict(
                 
-                large_arrays_keys=large_arrays_keys,
-                scores0=hs0["scores"][j],
-                # grads_mlp0=hs0['grads_mlp'][j],
-                # grads_mlp_cfc0=hs0['grads_mlp_cfc'][j],
-                # grads_attn0=hs0['grads_attn'][j],
-                
-                # hs1=float_to_int16(torch.from_numpy(hs1['hidden_states'][j])),
-                # scores1=hs1["scores"][j],                    
+                # large_arrays_keys=large_arrays_keys,
+                scores0=hs0["scores"][j],            
                 
                 ds_index=index[j],
                 

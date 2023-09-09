@@ -25,9 +25,13 @@ from datasets import Dataset
 import numpy as np
 import torch
 import torch.nn.functional as F
-from baukit import Trace, TraceDict
+from baukit.nethook import Trace, TraceDict, recursive_copy
 from einops import rearrange, reduce, repeat
 from src.datasets.scores import choice2id, choice2ids
+
+
+def tcopy(x: torch.Tensor):
+    return x.clone().detach().cpu()
 
 def counterfactual_backwards(model, scores, token_y, token_n):
     """do a backwards pass where the loss is the distance to the opposite scores"""
@@ -44,7 +48,7 @@ def stack_trace_returns(ret: TraceDict, names: List[str]) -> torch.Tensor:
     return rearrange(hs, 'layers b s hs -> b layers s hs')[:, :, -1]
 
 def stack_trace_grad_returns(ret: TraceDict, names: List[str]) -> torch.Tensor:
-    hs = [ret[h].output.grad for h in names]
+    hs = [ret[h].output.grad.detach() for h in names]
     return rearrange(hs, 'layers b s hs -> b layers s hs')[:, :, -1]
 
 def select_weight_grads(weight_grads: Dict[str, torch.Tensor], pattern:str= ".+attn.c_proj.weight", mean_axis:int=1):
@@ -57,8 +61,8 @@ class ExtractHiddenStates:
     
     model: PreTrainedModel
     tokenizer: PreTrainedTokenizer
-    layer_stride: int = 1
-    layer_padding: int = 2
+    layer_stride: int = 8
+    layer_padding: int = 3
 
 
     def get_batch_of_hidden_states(
@@ -99,50 +103,42 @@ class ExtractHiddenStates:
         MLPS = [f"transformer.h.{i}.mlp" for i in range(self.model.config.num_hidden_layers)]
         self.model.train()
         with TraceDict(self.model, HEADS+MLPS, retain_grad=True) as ret:
-            with torch.autocast('cuda'): # FIXME not reccomended for backwards pass
-                # Forward for one step is the same as greedy generation for one step
-                # https://github.com/huggingface/transformers/blob/234cfefbb083d2614a55f6093b0badfb2efc3b45/src/transformers/generation_utils.py#L1528
-                model_inputs = self.model.prepare_inputs_for_generation(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
-                outputs = self.model.forward(
-                    **model_inputs,
-                    return_dict=True,
-                    output_hidden_states=True,
-                )
-                scores = outputs["scores"] = outputs.logits[:, last_token, :]
-                token_n = choice_ids[:, 0] # [batch, tokens]
-                token_y = choice_ids[:, 1]
+            # with torch.autocast('cuda', torch.bfloat16): # FIXME not reccomended for backwards pass
+            # Forward for one step is the same as greedy generation for one step
+            # https://github.com/huggingface/transformers/blob/234cfefbb083d2614a55f6093b0badfb2efc3b45/src/transformers/generation_utils.py#L1528
+            model_inputs = self.model.prepare_inputs_for_generation(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
+            outputs = self.model.forward(
+                **model_inputs,
+                return_dict=True,
+                output_hidden_states=True,
+            )
+            scores = outputs["scores"] = outputs.logits[:, last_token, :].float()
+            token_n = choice_ids[:, 0] # [batch, tokens]
+            token_y = choice_ids[:, 1]
                 
             counterfactual_backwards(self.model, scores, token_y, token_n)  
-            
-            
+
+            # stack
+            hidden_states = list(outputs.hidden_states)
+            hidden_states = rearrange(hidden_states, 'lyrs b seq hs -> b lyrs seq hs')[:, :, last_token]
+            ## from ret, we get the layer activation and the grads on them
+            head_activation = stack_trace_returns(ret, HEADS)
+            mlp_activation = stack_trace_returns(ret, MLPS)
+            head_activation_grads = tcopy(stack_trace_grad_returns(ret, HEADS))
+            mlp_activation_grads = tcopy(stack_trace_grad_returns(ret, MLPS))
+            ## we also get the gradients on weights, as this might be a lower dimensional space than the grads on activations
+            ret = None
+               
             ps = self.model.named_parameters()
-            weight_grads = {n:g.grad.detach().float().cpu()[None, :] for n,g in ps if g.grad is not None} 
+            weight_grads = {
+                n: tcopy(g.grad)[None, :] 
+                for n,g in ps if g.grad is not None}
+            w_grads_mlp = select_weight_grads(weight_grads, pattern= ".+attn.c_proj.weight", mean_axis=1)
+            w_grads_attn = select_weight_grads(weight_grads, pattern= ".+attn.c_attn.weight", mean_axis=0)
+            w_grads_mlp_cfc = select_weight_grads(weight_grads, pattern= ".+mlp.c_fc.weight", mean_axis=0)
+            weight_grads = None
+
         self.model.zero_grad()
-
-        # stack
-        hidden_states = list(outputs.hidden_states)
-        hidden_states = rearrange(hidden_states, 'lyrs b seq hs -> b lyrs seq hs')[:, :, last_token]
-        ## from ret, we get the layer activation and the grads on them
-        head_activation = stack_trace_returns(ret, HEADS)
-        mlp_activation = stack_trace_returns(ret, MLPS)
-        head_activation_grads = stack_trace_grad_returns(ret, HEADS)
-        mlp_activation_grads = stack_trace_grad_returns(ret, MLPS)
-        ## we also get the gradients on weights, as this might be a lower dimensional space than the grads on activations
-        
-        
-        p = ".+mlp.c_proj.weight" # get the last weight of each layer (ignore bias)
-        
-
-            
-        # rearrange([g.mean(1).float() for k,g in weight_grads.items() if re.match(p, k)])
-        # w_grads_mlp = torch.stack([g.mean(1).float() for k,g in weight_grads.items() if re.match(p, k)])
-        w_grads_mlp = select_weight_grads(weight_grads, pattern= ".+attn.c_proj.weight", mean_axis=1)
-        w_grads_attn = select_weight_grads(weight_grads, pattern= ".+attn.c_attn.weight", mean_axis=0)
-        w_grads_mlp_cfc = select_weight_grads(weight_grads, pattern= ".+mlp.c_fc.weight", mean_axis=0)
-        # p = ".+attn.c_proj.weight" # get the last weight of each layer (ignore bias)
-        # w_grads_attn = torch.stack([g.mean(0).float() for k,g in weight_grads.items() if re.match(p, k)])
-        # p = ".+mlp.c_fc.weight" # get the last weight of each layer (ignore bias)
-        # w_grads_mlp_cfc = torch.stack([g.mean(0).float() for k,g in weight_grads.items() if re.match(p, k)])
         
         # select only some layers
         layers = self.get_layer_selection(outputs)
@@ -165,21 +161,23 @@ class ExtractHiddenStates:
             hidden_states=hidden_states,
             
             head_activation=head_activation,
-            mlp_activation=mlp_activation,
+            # mlp_activation=mlp_activation,
             
             head_activation_grads = head_activation_grads,
-            mlp_activation_grads=mlp_activation_grads,
+            # mlp_activation_grads=mlp_activation_grads,
             
-            w_grads_mlp=w_grads_mlp,
-            w_grads_mlp_cfc=w_grads_mlp_cfc,
+            # w_grads_mlp=w_grads_mlp,
+            # w_grads_mlp_cfc=w_grads_mlp_cfc,
             w_grads_attn=w_grads_attn,
         )
-        out = {k: to_numpy(v) for k, v in out.items()}
+        out = {k: detachcpu(v) for k, v in out.items()}
         if debug:            
             out['input_truncated'] = self.tokenizer.batch_decode(input_ids)
             out['text_ans'] = self.tokenizer.batch_decode(outputs["scores"].argmax(-1))
             
         return out
+    
+    
 
     def get_layer_selection(self, outputs):
         """Sometimes we don't want to save all layers.
@@ -194,3 +192,15 @@ class ExtractHiddenStates:
             self.layer_stride,
         )
 
+def detachcpu(x):
+    """
+    Trys to convert torch if possible a single item
+    """
+    if isinstance(x, torch.Tensor):
+        # note apache parquet doesn't support half https://github.com/huggingface/datasets/issues/4981
+        x = x.detach().cpu().float()
+        if x.squeeze().dim()==0:
+            return x.item()
+        return x
+    else:
+        return x

@@ -1230,3 +1230,8 @@ mlp 76%
 attn 75%
 
 previouslly I was extracting the grad on the weights. now it's the grad on the outputs/activations which seems better although perhaps harder to classify!
+
+# 2023-09-09 08:06:54
+
+- [ ] run probe on some data
+- [ ] add a mlp one too
