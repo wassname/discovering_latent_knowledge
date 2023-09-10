@@ -9,6 +9,7 @@ from typing import Any, Iterator, Literal, List, Dict
 from pathlib import Path
 from datasets import ClassLabel, Dataset, Value, load_dataset
 import yaml
+import numpy as np
 from elk.promptsource.templates import env
 from elk.promptsource import DatasetTemplates
 from elk.utils import (
@@ -16,7 +17,9 @@ from elk.utils import (
     infer_label_column,
     select_split,
 )
+import functools
 from elk.extraction.balanced_sampler import BalancedSampler, FewShotSampler
+import pandas as pd
 
 # Local path to the folder containing the templates
 TEMPLATES_FOLDER_PATH = Path(__file__).parent / "templates"
@@ -39,6 +42,27 @@ def load_default_sys_instructions(path='system.yaml'):
 default_sys_instructions = load_default_sys_instructions()
 
 
+# @functools.lru_cache()
+# def count_tokens(s):
+#     return len(tokenizer(s).input_ids)
+
+# def answer_len(answer_choices: list):
+#     a = count_tokens(answer_choices[0])
+#     b = count_tokens(answer_choices[1])
+#     return max(a, b)
+
+def sample_n_true_y_false_prompts(prompts, num_truth=1, num_lie=1, seed=42):
+    """sample some truth and some false"""
+    df = pd.DataFrame(prompts)
+    
+    # restrict to template where the choices are a single token
+    # m = df.answer_choices.map(answer_len)<=2
+    # df = df[m]
+    df = pd.concat([
+        df.query("instructed_to_lie==True").sample(num_truth, random_state=seed),
+        df.query("instructed_to_lie==False").sample(num_lie, random_state=seed)])
+    return df.to_dict(orient="records")
+
 def load_prompts(
     ds_string: str,
     *,
@@ -51,6 +75,8 @@ def load_prompts(
     rank: int = 0,
     world_size: int = 1,
     prompt_format: str="chatml",
+    prompt_sampler = sample_n_true_y_false_prompts,
+    N=np.inf,
 ) -> Iterator[dict]:
     """Load a dataset full of prompts generated from the specified dataset.
 
@@ -64,6 +90,8 @@ def load_prompts(
         template_path: Path to feed into `DatasetTemplates` for loading templates.
         rank: The rank of the current process. Defaults to 0.
         world_size: The number of processes. Defaults to 1.
+        prompt_format: which prompt format to use e.g. vicuna, llama, chatml
+        prompt_sampler: when given an unbalanced set of true and false prompts this might take one of each randomly
 
     Returns:
         An iterable of prompt dictionaries.
@@ -128,7 +156,10 @@ def load_prompts(
             print("No label column found, not balancing")
         ds = ds.to_iterable_dataset()
 
+    j = 0
     for i, example in enumerate(ds):
+        if j>N:
+            break
         prompts = _convert_to_prompts(
             example,
             binarize=binarize,
@@ -141,7 +172,10 @@ def load_prompts(
             prompt_format=prompt_format,
         )
         prompts = [{'ds_string': ds_string, 'example_i':i, **p} for p in prompts]
-        yield prompts
+        prompts = prompt_sampler(prompts)
+        for p in prompts:
+            j +=1
+            yield p
         
 
 

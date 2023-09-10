@@ -38,6 +38,6 @@ def ds2df(ds, cols=None):
 
 def load_ds(f):
     ds = load_from_disk(f)
-    ks = [k for k,v in ds[0].items() if (v.dtype=='int64') and k not in ['ds_index']]
+    ks = [k for k,v in ds[0].items() if (isinstance(v, (np.ndarray, np.generic, torch.Tensor) )) and (v.dtype=='int64') and k not in ['ds_index']]
     # ds = ds.map(lambda x: {k: int16_to_float(torch.from_numpy(ds[k]).long()) for k in ks})
     return ds

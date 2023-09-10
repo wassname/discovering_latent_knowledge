@@ -34,8 +34,8 @@ def scores2choice_probs(row, class2_ids: List[List[int]], keys=["scores0", "scor
     eps = 1e-5
     out = {}
     for key in keys:
-        scores = row[key]
-        probs = F.softmax(torch.from_numpy(scores), -1).numpy()
+        scores = torch.from_numpy(row[key])
+        probs = F.softmax(scores, -1).numpy()
         probs_c = [sum([probs[cc] for cc in c]) for c in class2_ids]
         
         # balance of probs
@@ -60,7 +60,7 @@ def choice2id(tokenizer, c: str, whitespace_first=True) -> int:
     
     # check that we can decode it
     c2 = tokenizer.decode([id_])
-    # assert tokenizer.decode([id_]) == c, f'We should be able to encode and decode the choices, but it failed: tokenizer.decode(tokenizer(`{c}`))==`{c2}`!=`{c}`'
+    assert c.startswith(c2), f'We should be able to encode and decode the choices, but it failed: tokenizer.decode(tokenizer(`{c}`))==`{c2}`!=`{c}`'
     return id_
 
 def choice2ids(all_choices: List[List[str]], tokenizer: PreTrainedTokenizer) -> List[List[int]]:

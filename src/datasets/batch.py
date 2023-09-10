@@ -9,7 +9,7 @@ import numpy as np
 
 from src.datasets.hs import ExtractHiddenStates
 from src.helpers.typing import float_to_int16, int16_to_float
-from src.helpers.ds import ds_keep_cols
+from src.helpers.ds import ds_keep_cols, clear_mem
 
 
 def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, mcdropout=True):
@@ -36,7 +36,6 @@ def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, mcdropout
         
         # different due to dropout
         hs0 = ehs.get_batch_of_hidden_states(input_ids=input_ids, attention_mask=attention_mask, use_mcdropout=mcdropout, choice_ids=choice_ids)
-
         
         for j in range(nn):
             # let's add the non torch metadata like label, prompt, lie, etc
@@ -61,6 +60,9 @@ def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, mcdropout
                 
                 **info
             )
+            
+        info = large_arrays_as_int16= hs0 = None
+        clear_mem()
 
 
 # def md5hash(s: bytes) -> str:

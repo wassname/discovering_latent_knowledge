@@ -1235,3 +1235,81 @@ previouslly I was extracting the grad on the weights. now it's the grad on the o
 
 - [ ] run probe on some data
 - [ ] add a mlp one too
+- [ ] try some alternative with updating a copy of weights to get alt score and hidden states!
+- [ ] try to work out why so much mem?!
+  - oh it's def the graph. just huge! from 7-9g to 25g even with bfloat16
+    - with or without tracedict
+    not much I can do
+
+
+what if I, instead of -probs. I switch yes and no!
+
+
+OK it hard to find a counterfactual one.. A single up date can go to far. And we can enter degenater cases like ones that say 
+
+>  negativenegativenegativenegativenegative
+
+But I've also found good ones. Hmm
+
+My current hypothesis:
+- It would be nice to compare a pair of counterfactual samples, but this presents difficulties. These are, firstly it's time consuming to produce a counterfactual. Secondly this might give away which the true one is, and the counterfacual might be obviously synthetic is if stands out in someway
+- Instead I will give the probe the weigths updates that backprop predicts. That is, the gradients to go from the current prediction to the opposite predict. Sure this will sometimes update to much and so on but I leave that to the probe to sort out. This gradient information may be usefull to the probe as it shows which weights were important, and in which direction.
+  - So if a "truth neuron" is important then it's gradient will be large. And perhaps the gradient direction will show a direction of truth or lie.
+  - I can either try the gradient on the weights (low dimensional but less info) or the gradient on the outputs (more relevent, but it must be gradients on a much more variable landscape
+  
+  
+Now this whole thing uses a lot of memory. Lets see if I can do it with the 3B model. But potentially I can fix this by note backpropogating all the way back through ~600 tokens. Can I just do the last few tokens? Or even the last one? I might be able to do that by specifying the inputs.. although they are not the tokens!
+
+I can probobly pass in input embeds fddirectoy
+ok... no even if  I do that, it still uses just as much memory....
+maybe I can parse all but the last token, then just do the next token based on detached hidden states?
+
+
+```py
+  # create position_ids on the fly for batch generation
+  position_ids = attention_mask.long().cumsum(-1) - 1
+  position_ids.masked_fill_(attention_mask == 0, 1)
+  inputs_embeds = self.wte(input_ids)
+  position_embeds = self.wpe(position_ids)
+```
+
+# 2023-09-10 10:23:49
+
+try to improve data loading
+- improve prompt stuff meh didn't help! Maybe I can make it iterative
+
+tried to improve memory
+- only doing part of the rollout with grad... this is not how transformers work, hidden state doesn't seem to passed along iteratively. I should have know.
+- tried specifying inptus to grad as only input_embeds, or part of them. Neither freeds memory or even was able to update the weights!
+- [ ] try freezing some weights?
+
+- **OH backprop to the embedding weights worked where the input_embed diddn't :star:!** e.g. this gives a bit less mem used
+
+except it does seem to use more mem after a few?
+```py
+inputs_embeds = model.transformer.wte(input_ids)
+outputs = model(inputs_embeds=inputs_embeds)
+loss = calc_loss(outputs)
+loss.backward(inputs=model.transformer.wte.weight)
+```
+
+
+## Where am I up to? 
+
+well I've given up on improving the memory for now. I'd like to look up more on counterfactual examples, but it doesn't feel prospective. 
+
+I would like to get a big grad dataset and try a probe to see if I can go from the linear probe acc of 80% to 95%. 
+
+I would also like to work out which parts I need to save to get a good prediction. Is it the head activations. Only the grads? Or the MLP. Knowing this will save me momory
+
+
+
+# 2023-09-10 12:22:25
+
+
+hmm looks at this, in they use torch.autograd to backpropr to noise on the embeddings https://github.com/microsoft/KEAR/blob/7376a3d190e5c04d5da9b99873abe621ae562edf/model/perturbation.py#L60
+
+
+# 2023-09-10 13:04:00
+
+wow I got 96% wit ha lienar prob and head_activation_and_grad !!
