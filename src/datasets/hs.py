@@ -156,10 +156,6 @@ class ExtractHiddenStates:
         layers = self.get_layer_selection(outputs)
         head_activation_and_grad = head_activation_and_grad[:, layers]
         mlp_activation_and_grad = mlp_activation_and_grad[:, layers]
-        # head_activation = head_activation[:, layers]
-        # mlp_activation = mlp_activation[:, layers]
-        # head_activation_grads = head_activation_grads[:, layers]
-        # mlp_activation_grads = mlp_activation_grads[:, layers]
         hidden_states = hidden_states[:, layers]
         
         w_grads_mlp_cfc = w_grads_mlp_cfc[:, layers]
@@ -179,11 +175,11 @@ class ExtractHiddenStates:
             
             # head_activation_grads = head_activation_grads,
             head_activation_and_grad=head_activation_and_grad,
-            mlp_activation_and_grad=mlp_activation_and_grad,
+            # mlp_activation_and_grad=mlp_activation_and_grad,
             
             # w_grads_mlp=w_grads_mlp,
-            w_grads_mlp_cfc=w_grads_mlp_cfc,
-            w_grads_attn=w_grads_attn,
+            # w_grads_mlp_cfc=w_grads_mlp_cfc,
+            # w_grads_attn=w_grads_attn,
         )
         out = {k: detachcpu(v) for k, v in out.items()}
         if debug:            
