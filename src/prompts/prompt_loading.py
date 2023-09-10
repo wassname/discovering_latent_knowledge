@@ -226,7 +226,7 @@ def _convert_to_prompts(
                     fewshot_examples = next(fewshot_iter)
                     if instructed_to_lie: fewshot_examples = [{**e, 'label': ~e['label']} for e in fewshot_examples]
                     fewshot_texts = [
-                        dict(user=q, response=a) for q, a in map(template.apply, fewshot_examples)
+                        dict(user=q, response=a.strip()) for q, a in map(template.apply, fewshot_examples)
                     ]
                     prompt_parts = fewshot_texts + prompt_parts
                     
