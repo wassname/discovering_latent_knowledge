@@ -5,6 +5,8 @@ import pandas as pd
 from torch.utils.data import DataLoader, TensorDataset
 from src.datasets.load import ds2df
 from datasets.arrow_dataset import Dataset
+from einops import rearrange, reduce, repeat
+
 
 def compute_distance(df):
     """distance between ans1 and ans2."""
@@ -21,6 +23,7 @@ class imdbHSDataModule(pl.LightningDataModule):
     def __init__(self,
                  ds: Dataset,
                  batch_size: int=32,
+                 x_cols = ['head_activation_and_grad']
                 ):
         super().__init__()
         self.save_hyperparameters(ignore=["ds"])
@@ -31,7 +34,7 @@ class imdbHSDataModule(pl.LightningDataModule):
         
         # extract data set into N-Dim tensors and 1-d dataframe
         self.ds_hs = (
-            self.ds.select_columns(['grads_mlp0'])
+            self.ds.select_columns(h.x_cols)
             .with_format("numpy")
         )
         df = self.df = ds2df(self.ds)
@@ -42,7 +45,9 @@ class imdbHSDataModule(pl.LightningDataModule):
         self.df['y'] = y_cls
         
         b = len(self.ds_hs)
-        self.hs0 = self.ds_hs['grads_mlp0']#.transpose(0, 2, 1)
+        self.hs0 = self.ds_hs[h.x_cols[0]]
+        # rearrange(self.hs0, 'b l hs  -> b hs s')
+        #.transpose(0, 2, 1)
         # self.hs1 = self.ds_hs['hs1'].transpose(0, 2, 1)
         self.ans0 = self.df['ans0'].values
         # self.ans1 = self.df['ans1'].values

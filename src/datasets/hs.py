@@ -179,11 +179,11 @@ class ExtractHiddenStates:
             
             # head_activation_grads = head_activation_grads,
             head_activation_and_grad=head_activation_and_grad,
-            # mlp_activation_and_grad=mlp_activation_and_grad,
+            mlp_activation_and_grad=mlp_activation_and_grad,
             
-            w_grads_mlp=w_grads_mlp,
-            # w_grads_mlp_cfc=w_grads_mlp_cfc,
-            # w_grads_attn=w_grads_attn,
+            # w_grads_mlp=w_grads_mlp,
+            w_grads_mlp_cfc=w_grads_mlp_cfc,
+            w_grads_attn=w_grads_attn,
         )
         out = {k: detachcpu(v) for k, v in out.items()}
         if debug:            

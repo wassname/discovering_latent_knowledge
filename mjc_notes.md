@@ -1313,3 +1313,5 @@ hmm looks at this, in they use torch.autograd to backpropr to noise on the embed
 # 2023-09-10 13:04:00
 
 wow I got 96% wit ha lienar prob and head_activation_and_grad !!
+
+oh but in the breakdown it's not getting the lies? or is that just my label?
