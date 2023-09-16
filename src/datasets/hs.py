@@ -161,6 +161,8 @@ class ExtractHiddenStates:
         w_grads_mlp_cfc = w_grads_mlp_cfc[:, layers]
         w_grads_attn = w_grads_attn[:, layers]
         w_grads_mlp = w_grads_mlp[:, layers]
+        
+        residual_stream = head_activation_and_grad + mlp_activation_and_grad
 
         # collect outputs
         out = dict(
@@ -168,18 +170,20 @@ class ExtractHiddenStates:
             scores=outputs["scores"],
             layers=layers,
             
-            # hidden_states=hidden_states,
+            hidden_states=hidden_states,
             
             # head_activation=head_activation,
-            # mlp_activation=mlp_activation,
-            
+            # mlp_activation=mlp_activation,            
             # head_activation_grads = head_activation_grads,
+            
             head_activation_and_grad=head_activation_and_grad,
-            # mlp_activation_and_grad=mlp_activation_and_grad,
+            mlp_activation_and_grad=mlp_activation_and_grad,
+            
+            residual_stream=residual_stream,
             
             # w_grads_mlp=w_grads_mlp,
             # w_grads_mlp_cfc=w_grads_mlp_cfc,
-            # w_grads_attn=w_grads_attn,
+            w_grads_attn=w_grads_attn,
         )
         out = {k: detachcpu(v) for k, v in out.items()}
         if debug:            

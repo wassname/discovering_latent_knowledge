@@ -1309,9 +1309,115 @@ I would also like to work out which parts I need to save to get a good predictio
 
 hmm looks at this, in they use torch.autograd to backpropr to noise on the embeddings https://github.com/microsoft/KEAR/blob/7376a3d190e5c04d5da9b99873abe621ae562edf/model/perturbation.py#L60
 
+https://github.com/deeplearning2012/ecco/blob/40ff4cd3661a202d4ad5bfb9bbc0e54701c1dd29/src/ecco/attribution.py#L59
 
 # 2023-09-10 13:04:00
 
 wow I got 96% wit ha lienar prob and head_activation_and_grad !!
 
 oh but in the breakdown it's not getting the lies? or is that just my label?
+
+
+# 2023-09-10 19:04:13
+
+:bug: oh so in the amazon polarity ones, the prompt has an extra \n... that doesn't fit for me. I have an example with two \n, but then a prompt with one...
+
+hmm I need to dive into this, maybe if I always use a blank answer
+
+
+:star: ah I was truncating the prompt. 1 shot seems better
+
+UPTO redo imdb but with 1 shot, and therefore less mem and truncating of sys instructions...
+
+# 2023-09-11 06:38:05
+
+So I get almost 100% somehow, even with a linear probe!. Where is it cheating? It's cutting a lot based on ones it doesn't know... is it unbalancing it?
+
+Without cutting the 50% it doesn't know we get 78-85%, which is about how many it knows?
+
+# 2023-09-11 20:35:32
+
+Huh I can get near 100% on either imdb or amazon polarity but not both (more like 60%). Why is that?
+
+# 2023-09-15 12:51:01
+
+https://www.lesswrong.com/posts/nmxzr2zsjNtjaHh7x/actually-othello-gpt-has-a-linear-emergent-world#Intervening
+
+Ideas:
+- maybe I didn't need grads, just the outputs?
+  - [x] OK with a linear prob: residual head gets 0% on lies. grads get 50%, so grads seems important but I should try mlp. It's worth together
+- maybe I can use state representations like neel nanda does? he seems to use post_residual, what is what. oh wait's it's what I'm using but added together
+- [x] maybe I can use a linear probe like https://github.com/likenneth/othello_world/blob/f23bb5696cf30b93bd8af8a391ee33fc3aac417e/mechanistic_interpretability/tl_probing_v1.py#L97
+  - meh it's just my model with one layer and no activation
+
+# 2023-09-15 18:03:17
+
+Experiment!
+
+| feats                          | val acc | test acc |
+| ------------------------------ | ------- | -------- |
+| w_grads_mlp[0]                 | 0.31    | 0.26     |
+| head_activation_and_grad[0]    | 0.92    | 0.73     |
+| head_activation_and_grad[1]    | 0.5     | 0.47     |
+| head_activation_and_grad[0, 1] | 1       | 0.94     |
+| mlp_activation_and_grad[0]     | 0.89    | 0.81     |
+| mlp_activation_and_grad[1]     | 0.5     | 0.47     |
+| mlp_activation_and_grad[0, 1]  | 1       | 0.89     |
+| residual_stream[0]             | 0.86    | 0.84     |
+| residual_stream[1]             | 0.5     | 0.47     |
+| residual_stream[0, 1]          | 1       | 0.92     |
+
+
+| feats                         | val acc | test acc |
+| ----------------------------- | ------- | -------- |
+| weight_grads_mlp              | 0.31    | 0.26     |
+| **head_activation_and_grad**  | 1       | 0.94     |
+| **head_activation**           | 0.92    | 0.73     |
+| head_grad                     | 0.5     | 0.47     |
+| mlp_activation_and_grad[0, 1] | 1       | 0.89     |
+| **mlp_activation**            | 0.89    | 0.81     |
+| mlp_grad                      | 0.5     | 0.47     |
+| **residual_stream_and_grads** | 1       | 0.92     |
+| residual_stream               | 0.86    | 0.84     |
+| residual_stream_grads         | 0.5     | 0.47     |
+
+conclusions:
+- weight grads don't help
+- head > residual > mlp
+- grad_and_act > act > grad
+
+So the best is head_grad_and_act
+
+But given that head activation is good, and residual stream is good... perhaps I should use them? As they let me use a 4x larger model or batch
+
+
+And yes the activation stream one get's 92%.11!
+but the residual stream on gets 84% but that's not much when the balance is not even
+
+
+OK so dice is better for loss and measuring acc like peformance. 
+
+But when I used multiple datasets the performance degrades a lot! why is that?
+
+# what datasets can I use?
+
+right now just boolean as the binarize thing isn't working for either the sampler or fewshot
+
+# 2023-09-16 13:32:00
+
+Next I think I need to sanity check the datasets!
+- normalize? or at least check dist
+- visualize all data
+- check key statistics: acc
+
+
+then decidce on what we need to gather
+
+
+FIXME:bug: :idea: OMG is the bug that I'm messing up the known question index?
+
+- [x] f
+- [/] test
+- [.] f
+- [>] f 
+- [o] d
