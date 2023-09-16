@@ -136,6 +136,8 @@ def load_prompts(
     rng = Random(seed)
     if num_shots > 0:
         train_name = select_split(ds_dict, "train")
+        
+        # TODO don't we need to binarize this?
         fewshot = FewShotSampler(
             ds_dict[train_name].shuffle(seed=seed),  # TODO: not iterator
             num_shots=num_shots,
@@ -212,6 +214,7 @@ def _convert_to_prompts(
         rng.shuffle(label_choices)
 
     for template in templates:
+        answer_choices=template.get_fixed_answer_choices_list()
         for instructed_to_lie in [False, True]:
             for sys_instr_name, sys_instr in sys_instructions[instructed_to_lie].items():
                 fake_example = example.copy()
@@ -224,10 +227,19 @@ def _convert_to_prompts(
                 if fewshot_iter is not None:
                     # Infinite iterator so we don't need to worry about StopIteration
                     fewshot_examples = next(fewshot_iter)
-                    if instructed_to_lie: fewshot_examples = [{**e, 'label': ~e['label']} for e in fewshot_examples]
+                    if instructed_to_lie: 
+                        fewshot_examples = [{**e, 'label': e['label']^0} for e in fewshot_examples]
+                        for e in fewshot_examples:
+                            # arg, check out negation worked
+                            assert e['label']>=0
+                            assert e['label']<2
+                        
                     fewshot_texts = [
                         dict(user=q, response=a.strip()) for q, a in map(template.apply, fewshot_examples)
                     ]
+                    for d in fewshot_texts:
+                        # some of the answers have extra trailing text, that's OK. But extra preceeding text is not, let's check for that
+                        assert any([d['response'].startswith(a) for a in answer_choices]), f"fewshot response `{d['response']}` has extra preceeding text compared to allowed choices: {answer_choices}. template is: {template.name}"
                     prompt_parts = fewshot_texts + prompt_parts
                     
                 prompt_parts[0]['system'] = sys_instr
@@ -240,7 +252,7 @@ def _convert_to_prompts(
                     answer=a.strip(),
                     question=q,
                     
-                    answer_choices=template.get_fixed_answer_choices_list(),
+                    answer_choices=answer_choices,
                     template_name=template.name,
                     label_true=example['label'],
                     label_instructed=fake_example['label'],
