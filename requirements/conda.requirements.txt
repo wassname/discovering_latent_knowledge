@@ -152,7 +152,7 @@ sklearn==0.0.post5
 smmap==5.0.0
 sniffio==1.3.0
 soupsieve==2.4.1
--e git+https://github.com/wassname/discovering_latent_knowledge.git@43074f79cbb58c735ff1befab81f28811831509b#egg=src
+-e git+https://github.com/wassname/discovering_latent_knowledge.git@7b532b1b300797fcdf9eb4fc6f1ed5fbde5470db#egg=src
 stack-data==0.6.2
 starlette==0.22.0
 starsessions==1.3.0
