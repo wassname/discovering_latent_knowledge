@@ -1,4 +1,5 @@
 dataset: great_code
+label_column: label
 templates:
   027215bb-1055-4584-b3ce-3267a8043d3a: !Template
     answer_choices: null

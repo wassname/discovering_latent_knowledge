@@ -12,7 +12,7 @@ from src.helpers.typing import float_to_int16, int16_to_float
 from src.helpers.ds import ds_keep_cols, clear_mem
 
 
-def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, mcdropout=True):
+def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, layer_padding=3, layer_stride=4):
     """
     Given an encoder-decoder model, a list of data, computes the contrast hidden states on n random examples.
     Returns numpy arrays of shape (n, hidden_dim) for each candidate label, along with a boolean numpy array of shape (n,)
@@ -20,7 +20,7 @@ def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, mcdropout
     
     This is deliberately simple so that it's easy to understand, rather than being optimized for efficiency
     """
-    ehs = ExtractHiddenStates(model, tokenizer)
+    ehs = ExtractHiddenStates(model, tokenizer, layer_stride=layer_stride, layer_padding=layer_padding)
     
     torch_cols = ['input_ids', 'attention_mask', 'choice_ids']
     ds_t_subset = ds_keep_cols(data, torch_cols)
@@ -35,7 +35,7 @@ def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, mcdropout
         index = i*batch_size+np.arange(nn)
         
         # different due to dropout
-        hs0 = ehs.get_batch_of_hidden_states(input_ids=input_ids, attention_mask=attention_mask, use_mcdropout=mcdropout, choice_ids=choice_ids)
+        hs0 = ehs.get_batch_of_hidden_states(input_ids=input_ids, attention_mask=attention_mask, choice_ids=choice_ids)
         
         for j in range(nn):
             # let's add the non torch metadata like label, prompt, lie, etc
@@ -64,40 +64,3 @@ def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, mcdropout
         info = large_arrays_as_int16= hs0 = None
         clear_mem()
 
-
-# def md5hash(s: bytes) -> str:
-#     return hashlib.md5(s).hexdigest()
-
-# # unique hash
-# def get_unique_config_hash(cfg, ds_name, split_type):
-#     """
-#     generates a unique name
-    
-#     datasets would do this use the generation kwargs but this way we have control and can handle non-picklable models and thing like the output of prompt functions if they change
-    
-#     # """
-#     example_prompt1 = prompt_fn("text", response=0, lie=True)
-#     model_repo = model.config._name_or_path
-    
-#     kwargs = [str(model), str(tokenizer), str(data), str(prompt_fn.__name__), N]
-#     key = pickle.dumps(kwargs, 1)
-#     hsh = md5hash(key)[:6]
-
-#     sanitize = lambda s:s.replace('/', '').replace('-', '_') if s is not None else s
-#     # config_name = f"{sanitize(model_repo)}-N_{N}-ns-{hsh}"
-    
-#     info_kwargs = dict(model_repo=model_repo, config=model.config, data=str(data), prompt_fn=str(prompt_fn.__name__), N=N, 
-#                        example_prompt1=example_prompt1, 
-#                        hsh=hsh)
-    
-#     return hsh, info_kwargs
-
-# sanitize = lambda s:s.replace('/', '').replace('_', '-') if s is not None else s
-
-# def ds_params2fname(dataset_params: dict) -> str:
-#     prompt = sanitize(dataset_params['prompt_fmt'].__name__)
-#     model_repo = sanitize(dataset_params['model_repo'].split('/')[-1])
-#     dataset_name = sanitize(dataset_params['dataset_name'])
-#     N = dataset_params['N']
-#     N_SHOTS = dataset_params['N_SHOTS']
-#     return f"model-{model_repo}_ds-{dataset_name}_{prompt}_N{N}_{N_SHOTS}shots_"

@@ -1414,10 +1414,86 @@ Next I think I need to sanity check the datasets!
 then decidce on what we need to gather
 
 
-FIXME:bug: :idea: OMG is the bug that I'm messing up the known question index?
+- [x] :bug: :idea: OMG is the bug that I'm messing up the known question index?
+- [x] imdb truncated :(, need to limit length of shots or whole ds?
+- [ ] TODO: fix datasets
+- [ ] Fix datasets that say no label column
+- [ ] Fix binarize datasets
 
-- [x] f
-- [/] test
-- [.] f
-- [>] f 
-- [o] d
+datasets:
+- imdb: I'm cropping it for some reason? FIXME
+- super_glue:boolq: 55%
+- amazon_polarity 72% :)
+- tweet_eval:irony: 50%
+
+
+glue:qnli - works!
+dbpedia_16
+piqa
+
+
+Hmm what's the easiest way to measure truncation.
+In my current batch on is 8096... so def truncation going on!
+- length is merely the length *after truncation* so just the max length
+- overflow_to_sample_mapping: not sure what that is?
+- offset_mapping shape (17, 600, 2)... which is weird since it's a batch of 10?  (char_start, char_end) for each token.
+
+# exp: does a py script help with the memory problems of 010_make_dataset?
+
+```sh
+ulimit -S -m 1550000000
+ulimit -S -v 1550000000
+python -m pdbp notebooks/011_make_dataset.py \
+"WizardLM/WizardCoder-3B-V1.0" \
+ imdb amazon_polarity super_glue:boolq glue:qnli \
+ --max_examples 260 260 \
+ --max_length=600 \
+ --num_shots=1 
+```
+
+- [ ] run this exp
+
+# exp: do counterfactual states help?
+
+- [ ] do this exp
+
+TODO: put this code in a file, and use it in hs, optionall, to get hs
+```py
+def get_loss(model, scores, token_y, token_n):
+    eps = 1e-4
+    
+    assert token_y.shape[-1]<2, 'FIXME just use the first token for now'
+    score_y = torch.index_select(scores, 1, token_y[:, 0])
+    score_n = torch.index_select(scores, 1, token_n[:, 0])
+    
+    loss = F.l1_loss(score_y, score_n) + F.l1_loss(score_n, score_y)
+    return loss
+
+
+# make counterfactual model
+orig_state_dict = model.state_dict()
+optimizer = torch.optim.SGD(model.parameters(),lr=.00002) # FIXME this is a magic number that varies a little by model and dataset row... let's try anyway
+model.eval()
+optimizer.zero_grad()
+inputs_embeds = model.transformer.wte(input_ids)
+outputs = model(
+    inputs_embeds=inputs_embeds, 
+    attention_mask=attention_mask, 
+    output_hidden_states=True, return_dict=True, use_cache=False
+    )
+scores = outputs.logits[:, -1, :].float()
+token1_n = choice_ids[:, 0] # [batch, tokens]
+token1_y = choice_ids[:, 1]
+optimizer.zero_grad()
+loss = get_loss(model, scores, token1_y, token1_n)
+loss.backward(inputs=model.transformer.wte.weight)
+optimizer.step()
+optimizer.zero_grad()
+print('loss', loss)
+
+# counterfactual inference
+outputs2 = model(inputs_embeds=inputs_embeds, attention_mask=attention_mask, output_hidden_states=True, return_dict=True, use_cache=False)
+
+# return model
+model.load_state_dict(orig_state_dict)
+```

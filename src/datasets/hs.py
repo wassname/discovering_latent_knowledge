@@ -40,13 +40,9 @@ def counterfactual_loss(model, scores, token_y, token_n):
     model.zero_grad()
     assert token_y.shape[1]<2, 'FIXME just use the first token for now'
     score_y = torch.index_select(scores, 1, token_y[:, 0])
-    score_n = torch.index_select(scores, 1, token_n[:, 0])
-    pred = score_y - score_n
-    
+    score_n = torch.index_select(scores, 1, token_n[:, 0])    
     # this loss would be zero if the logits of the positive and negative tokens werre flipped
     loss = F.l1_loss(score_y, score_n) + F.l1_loss(score_n, score_y)
-    # loss = score_y / (score_n + eps)
-    # loss = F.l1_loss(pred, -pred)
     return loss
     
 
@@ -79,8 +75,8 @@ class ExtractHiddenStates:
         attention_mask: Optional[torch.Tensor] = None,
         choice_ids: List[torch.Tensor] = None,
         truncation_length=999,
-        use_mcdropout=True,
         debug=False,
+        counterfactual_fwd=False,
     ):
         """
         Given a decoder model and a batch of texts, gets a pair of hidden states (in a given layer) on that input texts
@@ -91,6 +87,7 @@ class ExtractHiddenStates:
         assert self.tokenizer.truncation_side == 'left'
         
         if input_text:
+            raise NotADirectoryError("FIXME")
             t = self.tokenizer(
                 input_text,
                 return_tensors="pt",
@@ -108,7 +105,8 @@ class ExtractHiddenStates:
         last_token = -1
         HEADS = [f"transformer.h.{i}.attn.c_proj" for i in range(self.model.config.num_hidden_layers)]
         MLPS = [f"transformer.h.{i}.mlp" for i in range(self.model.config.num_hidden_layers)]
-        self.model.train()
+        
+        self.model.eval()
         with TraceDict(self.model, HEADS+MLPS, retain_grad=True, detach=True) as ret:
             # with torch.autocast('cuda', torch.bfloat16): # FIXME not reccomended for backwards pass
             # Forward for one step is the same as greedy generation for one step
@@ -124,6 +122,7 @@ class ExtractHiddenStates:
             token_y = choice_ids[:, 1]
                 
             loss = counterfactual_loss(self.model, scores, token_y, token_n)  
+            
             loss.backward()
 
             # stack
@@ -138,35 +137,61 @@ class ExtractHiddenStates:
             mlp_activation_and_grad = torch.stack([mlp_activation, mlp_activation_grads], dim=-1)
             ret = head_activation = mlp_activation = head_activation_grads = mlp_activation_grads = None
                
-            ## we also get the gradients on weights, as this might be a lower dimensional space than the grads on activations
-            ps = self.model.named_parameters()
-            weight_grads = {
-                n: tcopy(g.grad)[None, :] 
-                for n,g in ps if g.grad is not None}
+            # DELETEME: these don't seem to help
+            # ## we also get the gradients on weights, as this might be a lower dimensional space than the grads on activations
+            # ps = self.model.named_parameters()
+            # weight_grads = {
+            #     n: tcopy(g.grad)[None, :] 
+            #     for n,g in ps if g.grad is not None}
             
-            w_grads_mlp = select_weight_grads(weight_grads, pattern= ".+attn.c_proj.weight", mean_axis=1)
-            w_grads_attn = select_weight_grads(weight_grads, pattern= ".+attn.c_attn.weight", mean_axis=0)
-            w_grads_mlp_cfc = select_weight_grads(weight_grads, pattern= ".+mlp.c_fc.weight", mean_axis=0)
-            weight_grads = None
-
-        self.model.zero_grad()
-        self.model.eval()
-        
+            # w_grads_mlp = select_weight_grads(weight_grads, pattern= ".+attn.c_proj.weight", mean_axis=1)
+            # w_grads_attn = select_weight_grads(weight_grads, pattern= ".+attn.c_attn.weight", mean_axis=0)
+            # w_grads_mlp_cfc = select_weight_grads(weight_grads, pattern= ".+mlp.c_fc.weight", mean_axis=0)
+            # weight_grads = None
+            
+     
         # select only some layers
         layers = self.get_layer_selection(outputs)
         head_activation_and_grad = head_activation_and_grad[:, layers]
         mlp_activation_and_grad = mlp_activation_and_grad[:, layers]
         hidden_states = hidden_states[:, layers]
         
-        w_grads_mlp_cfc = w_grads_mlp_cfc[:, layers]
-        w_grads_attn = w_grads_attn[:, layers]
-        w_grads_mlp = w_grads_mlp[:, layers]
+        # w_grads_mlp_cfc = w_grads_mlp_cfc[:, layers]
+        # w_grads_attn = w_grads_attn[:, layers]
+        # w_grads_mlp = w_grads_mlp[:, layers]
         
         residual_stream = head_activation_and_grad + mlp_activation_and_grad
+        
+        if counterfactual_fwd:
+            with TraceDict(self.model, HEADS+MLPS, detach=True) as ret2:
+                orig_state_dict = self.model.state_dict()
+                optimizer = torch.optim.SGD(self.model.parameters(),lr=.00002)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                outputs2 = self.model(**model_inputs, 
+                    output_hidden_states=True, return_dict=True)
+                
+                head_activation2 = tcopy(stack_trace_returns(ret2, HEADS))
+                mlp_activation2 = tcopy(stack_trace_returns(ret2, MLPS))
+                residual_stream2 = head_activation2 + mlp_activation2
+                residual_stream2 = residual_stream2[:, layers]
+                
+                # stack
+                hidden_states2 = list(outputs2.hidden_states)
+                hidden_states2 = rearrange(hidden_states2, 'lyrs b seq hs -> b lyrs seq hs')[:, :, last_token]
+                hidden_states2 = hidden_states2[:, layers]
+            # reset
+            self.model.load_state_dict(orig_state_dict)
+            optimizer.zero_grad()
+            
+        self.model.eval()
+
 
         # collect outputs
         out = dict(
             input_ids=input_ids,
+            attention_mask=attention_mask,
             scores=outputs["scores"],
             layers=layers,
             
@@ -176,22 +201,27 @@ class ExtractHiddenStates:
             # mlp_activation=mlp_activation,            
             # head_activation_grads = head_activation_grads,
             
-            head_activation_and_grad=head_activation_and_grad,
-            mlp_activation_and_grad=mlp_activation_and_grad,
+            # head_activation_and_grad=head_activation_and_grad,
+            # mlp_activation_and_grad=mlp_activation_and_grad,
             
             residual_stream=residual_stream,
             
             # w_grads_mlp=w_grads_mlp,
             # w_grads_mlp_cfc=w_grads_mlp_cfc,
-            w_grads_attn=w_grads_attn,
+            # w_grads_attn=w_grads_attn,
         )
         out = {k: detachcpu(v) for k, v in out.items()}
         if debug:            
             out['input_truncated'] = self.tokenizer.batch_decode(input_ids)
             out['text_ans'] = self.tokenizer.batch_decode(outputs["scores"].argmax(-1))
+        
+        if counterfactual_fwd:
+            out['residual_stream2'] = residual_stream2
+            out['hidden_states2'] = hidden_states2
             
         # I shouldn't have to do this but I get memory leaks
-        outputs = hidden_states = loss = scores = token_y = token_n = input_ids = attention_mask = choice_ids = None
+        self.model.load_state_dict(orig_state_dict)
+        outputs = hidden_states = hidden_states2 = loss = orig_state_dict = scores = token_y = token_n = input_ids = attention_mask = choice_ids = residual_stream = residual_stream2 = None
         clear_mem()
             
         return out

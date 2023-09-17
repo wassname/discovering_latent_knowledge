@@ -142,6 +142,7 @@ def load_prompts(
             ds_dict[train_name].shuffle(seed=seed),  # TODO: not iterator
             num_shots=num_shots,
             rng=rng,
+            label_col=label_column,
         )
         fewshot_iter = iter(fewshot)
     else:
