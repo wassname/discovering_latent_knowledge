@@ -8,12 +8,12 @@ from datasets.arrow_dataset import Dataset
 from einops import rearrange, reduce, repeat
 
 
-def compute_distance(df):
-    """distance between ans1 and ans2."""
-    true_switch_sign = df.label_true*2-1 # switch sign to desired answer. with this we ask which is more true
-    # otherwise we ask which is more positive
-    distance = (df.ans1-df.ans0) * true_switch_sign
-    return distance
+# def compute_distance(df):
+#     """distance between ans1 and ans2."""
+#     true_switch_sign = df.label_true*2-1 # switch sign to desired answer. with this we ask which is more true
+#     # otherwise we ask which is more positive
+#     distance = (df.ans1-df.ans0) * true_switch_sign
+#     return distance
 
 to_tensor = lambda x: torch.from_numpy(x).float()
 to_ds = lambda hs0, y: TensorDataset(to_tensor(hs0), to_tensor(y))

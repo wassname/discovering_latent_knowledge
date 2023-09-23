@@ -1447,8 +1447,7 @@ python -m pdbp notebooks/011_make_dataset.py \
 "WizardLM/WizardCoder-3B-V1.0" \
  imdb amazon_polarity super_glue:boolq glue:qnli \
  --max_examples 260 260 \
- --max_length=600 \
- --num_shots=1 
+ --max_length=600
 ```
 
 - [ ] run this exp
@@ -1497,3 +1496,46 @@ outputs2 = model(inputs_embeds=inputs_embeds, attention_mask=attention_mask, out
 # return model
 model.load_state_dict(orig_state_dict)
 ```
+
+
+UPTO:
+- I made a dataset py file
+- I made it collect counterfactual inference
+- now I need to see if a probe that has residual and counterfactual residual does better!
+
+
+counterfactuals?
+- **dice** loss:
+  - [x] hidden_State and hidden_stte counterfactual.... just **overfits**.  acc_lie_lie=0.00% from probe 0.82
+  - [x] with grad it also overfits acc_lie_lie=0.00%? :( this is weird as it has no counterfactuals.. .what's going on??
+    - [ ] :poop:  :bug: this does not make sense!?! why is it sudeently overfitting. this invalidated all these experiments
+  - [x] wioth residual it overfits?  :(
+- [ ] ranking?  
+   - [ ] what about counterfactuals with **ranking**?! 0.87.44$ acc_lie_lie. pretty good?
+- [x] what about nonlinear? nope
+
+Next
+- [ ] with noise on embeddings? this would allow large models agian. I'm really struggling with these small models!?
+
+# 2023-09-22 13:36:27
+
+So there must be bugs in my datasets, as
+- only 3 sysprompts!
+- each dataset seems to only have truth or lie... weird
+- imdb has no coverage
+
+# 2023-09-23 13:13:27
+
+Debugging the datasets
+
+Observations
+- Why are there only X prompts?
+- Why are some only lies, others not??!
+
+```py
+# snippets for debugging chosen prompts
+print(pd.Series(ds_tokens['sys_instr_name']).value_counts())
+print(pd.Series(ds_tokens['template_name']).value_counts())
+print(pd.Series(ds_tokens['label_instructed']).value_counts())
+```
+['ds_string', 'example_i', 'answer', 'question', 'answer_choices', 'template_name', 'label_true', 'label_instructed', 'instructed_to_lie', 'sys_instr_name', 'input_ids', 'attention_mask', 'truncated', 'prompt_truncated', 'choice_ids'],

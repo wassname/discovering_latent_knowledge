@@ -32,10 +32,10 @@ class ExtractConfig(Serializable):
     """Indices of layers to extract hidden states from. We follow the HF convention, so
     0 is the embedding, and 1 is the output of the first transformer layer."""
 
-    layer_stride: InitVar[int] = 1
+    layer_stride: InitVar[int] = 4
     """Shortcut for `layers = (0,) + tuple(range(1, num_layers + 1, stride))`."""
     
-    layer_padding: InitVar[int] = 0
+    layer_padding: InitVar[int] = 4
     """Clips the first and last layers by this amount"""
 
     seed: int = 42

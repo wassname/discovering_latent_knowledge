@@ -4,19 +4,12 @@
 # 
 
 # %%
-# import your package
-# %load_ext autoreload
-# %autoreload 2
-
 from loguru import logger
 import sys
 logger.remove()
 logger.add(sys.stderr, format="<level>{message}</level>", level="INFO")
 
 import pandas as pd
-# from matplotlib import pyplot as plt
-# %matplotlib inline
-# plt.style.use('ggplot')
 
 # %%
 import numpy as np
@@ -50,8 +43,11 @@ from src.datasets.load import rows_item
 from src.datasets.batch import batch_hidden_states
 # from src.datasets.scores import choice2ids, scores2choice_probs
 
-# %% [markdown]
-# # Params
+from datasets import disable_caching
+disable_caching()
+import psutil
+max_dataset_memory = f"{psutil.virtual_memory().total //2}"
+os.environ["HF_DATASETS_IN_MEMORY_MAX_SIZE"] = max_dataset_memory
 
 # %%
 from simple_parsing import ArgumentParser
@@ -70,27 +66,24 @@ parser.add_arguments(ExtractConfig, dest="run")
 
 args = parser.parse_args()
 cfg = args.run
-cfg
+print(cfg)
 
-# %%
-# Params
 BATCH_SIZE = 1  # None # None means auto # 6 gives 16Gb/25GB. where 10GB is the base model. so 6 is 6/15
 
-# %% [markdown]
-# # Model
-# 
-# Chosing:
-# - https://old.reddit.com/r/LocalLLaMA/wiki/models
-# - https://huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard
-# - https://github.com/deep-diver/LLM-As-Chatbot/blob/main/model_cards.json
-# 
-# 
-# A uncensored and large coding ones might be best for lying.
 
 # %%
 from src.models.load import verbose_change_param, AutoConfig, AutoTokenizer, AutoModelForCausalLM
 
 def load_model(model_repo = "HuggingFaceH4/starchat-beta"):
+    """
+    Chosing:
+    - https://old.reddit.com/r/LocalLLaMA/wiki/models
+    - https://huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard
+    - https://github.com/deep-diver/LLM-As-Chatbot/blob/main/model_cards.json
+
+
+    A uncensored and large coding ones might be best for lying.
+    """
     # see https://github.com/deep-diver/LLM-As-Chatbot/blob/main/models/starchat.py
     model_options = dict(
         device_map="auto",
@@ -112,10 +105,6 @@ def load_model(model_repo = "HuggingFaceH4/starchat-beta"):
 
     return model, tokenizer
 
-
-
-# %% [markdown]
-# # Load Dataset
 
 # %%
 from itertools import chain
@@ -188,7 +177,7 @@ ds_tokens = (
         ),
         batched=True,
     )
-    .map(lambda r: {"truncated": np.sum(r["attention_mask"], -1)<cfg.max_length})
+    .map(lambda r: {"truncated": np.sum(r["attention_mask"], -1)==cfg.max_length})
     .map(
         lambda r: {"prompt_truncated": tokenizer.batch_decode(r["input_ids"])},
         batched=True,
@@ -200,7 +189,7 @@ ds_tokens
 # %%
 ds_tokens = ds_tokens.filter(lambda r: r['truncated']==False)
 ds_tokens = ds_tokens.select(range(min(len(ds_tokens), N)))
-ds_tokens.num_rows
+print('removed truncated rows to leave: num_rows', ds_tokens.num_rows)
 
 # %% [markdown]
 # ## Save as Huggingface Dataset
@@ -277,15 +266,12 @@ ds3 = (
 )
 ds3
 
-# %%
-ds3.config_name
-
 # %% [markdown]
 # ## Save to disk
 
 # %%
 ds3.save_to_disk(f)
-f
+print('! f=', f)
 
 # %% [markdown]
 # # QC
@@ -481,3 +467,5 @@ df2= ds2df(ds5)
 df_subset_successull_lies = df2.query("instructed_to_lie==True & (llm_ans==label_instructed)")
 print(f"filtered to {len(df_subset_successull_lies)} num successful lies out of {len(df2)} dataset rows")
 assert len(df_subset_successull_lies)>0, "there should be successful lies in the dataset"
+
+print(f)
