@@ -9,14 +9,10 @@ from datasets import disable_caching
 disable_caching()
 
 from loguru import logger
-import sys
-logger.remove()
-logger.add(sys.stderr, format="<level>{message}</level>", level="INFO")
+logger.add("make_dataset_{time}.log")
 
 import pandas as pd
-
 import numpy as np
-
 
 from typing import Optional, List, Dict, Union
 
@@ -41,6 +37,13 @@ from src.datasets.load import ds2df
 from src.datasets.load import rows_item
 from src.datasets.batch import batch_hidden_states
 # from src.datasets.scores import choice2ids, scores2choice_probs
+
+
+from itertools import chain
+import functools
+from src.prompts.prompt_loading import load_prompts
+from src.datasets.scores import scores2choice_probs
+from src.datasets.scores import choice2id, choice2ids
 
 from simple_parsing import ArgumentParser
 from src.extraction.config import ExtractConfig
@@ -264,13 +267,6 @@ def qc_ds(f):
 
 
 
-
-from itertools import chain
-import functools
-from src.prompts.prompt_loading import load_prompts
-from src.datasets.scores import scores2choice_probs
-from src.datasets.scores import choice2id, choice2ids
-
      
 # TODO: loop through all prompts in this dataset
 ds_names = cfg.datasets
@@ -292,6 +288,7 @@ for ds_name in ds_names:
     #     template_path = template_path/subset_name
     # template_path
 
+    # NOTE: you may need to `rm ~/.cache/huggingface/datasets/generator`
     N = cfg.max_examples[split_type!="train"]
     ds_prompts = Dataset.from_generator(
         load_prompts, 
@@ -305,7 +302,6 @@ for ds_name in ds_names:
             N=N*3,
         ), 
         )
-
 
     # ## Format prompts
     # The prompt is the thing we most often have to change and debug. So we do it explicitly here.
@@ -362,7 +358,6 @@ for ds_name in ds_names:
         ),
         gen_kwargs=gen_kwargs,
         num_proc=1,
-        
     )
 
     # ## Add labels

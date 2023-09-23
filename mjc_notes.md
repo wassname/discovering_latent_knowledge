@@ -1534,8 +1534,15 @@ Observations
 
 ```py
 # snippets for debugging chosen prompts
-print(pd.Series(ds_tokens['sys_instr_name']).value_counts())
-print(pd.Series(ds_tokens['template_name']).value_counts())
-print(pd.Series(ds_tokens['label_instructed']).value_counts())
+print(ds_name)
+print(pd.Series(ds_tokens['sys_instr_name']).value_counts())  # should be a wide distr?
+print(pd.Series(ds_tokens['template_name']).value_counts()) # should be a wide distr?
+print(pd.Series(ds_tokens['label_instructed']).value_counts()) # should be 50%
+print(pd.Series(ds_tokens['truncated']).value_counts()) # should be few
+print(pd.Series(ds_tokens['instructed_to_lie']).value_counts()) # should be 50%
+
 ```
 ['ds_string', 'example_i', 'answer', 'question', 'answer_choices', 'template_name', 'label_true', 'label_instructed', 'instructed_to_lie', 'sys_instr_name', 'input_ids', 'attention_mask', 'truncated', 'prompt_truncated', 'choice_ids'],
+
+
+Ah found it :brain: it was using the same random seed. so I was selecting the Nth each time, which happened to be diff for each dataset. But was the same template and type. OK now I can redo.

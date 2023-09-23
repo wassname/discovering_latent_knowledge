@@ -175,11 +175,11 @@ def load_prompts(
             prompt_format=prompt_format,
         )
         prompts = [{'ds_string': ds_string, 'example_i':i, **p} for p in prompts]
-        prompts = prompt_sampler(prompts)
+        prompts = prompt_sampler(prompts, seed=42+j)
         for p in prompts:
             j +=1
             yield p
-        
+
 
 
 
@@ -193,7 +193,7 @@ def _convert_to_prompts(
     sys_instructions: Dict[bool, Dict[str, str]] = default_sys_instructions,
     fewshot_iter: Iterator[list[dict]] | None = None,
     prompt_format: str = "chatml",
-) -> dict[str, Any]:
+) -> list:
     """Prompt-generating function to pass to `IterableDataset.map`."""
     prompt_template = load_prompt_structure(prompt_format=prompt_format)
     
