@@ -1,4 +1,4 @@
-name: dlk3
+name: dlk4
 channels:
   - conda-forge
 dependencies:
@@ -11,7 +11,4 @@ dependencies:
   - cudatoolkit=11.7
   - ca-certificates
   - openssl
-  - ipykernel
-  - pip
-  - certifi
-prefix: /home/ubuntu/mambaforge/envs/dlk3
+prefix: /home/ubuntu/mambaforge/envs/dlk4
