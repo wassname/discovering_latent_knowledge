@@ -1546,3 +1546,7 @@ print(pd.Series(ds_tokens['instructed_to_lie']).value_counts()) # should be 50%
 
 
 Ah found it :brain: it was using the same random seed. so I was selecting the Nth each time, which happened to be diff for each dataset. But was the same template and type. OK now I can redo.
+
+# 2023-09-24 16:38:46
+
+I got poor results in all the latest datasets. Maybe grad methods require too small a model and the model is too small to know anything? It certainly gets poor acc on simple sentiment tasks.
