@@ -3,6 +3,16 @@ import numpy as np
 import transformers
 import random
 import gc
+import pandas as pd
+
+def get_top_n(scores: torch.Tensor, tokenizer: transformers.PreTrainedTokenizer, n=10) -> pd.Series:
+    """Get top n choices and their probabilities given raw logits"""
+    probs = scores.softmax(-1).squeeze()
+    assert len(probs.shape)==1
+    top10 = torch.argsort(probs, dim=-1, descending=True)[:n]
+    top10_probs = probs[top10]
+    top10_ext = tokenizer.batch_decode(top10)
+    return pd.Series(top10_probs, index=top10_ext, name='probs')
 
 def to_numpy(x):
     """
@@ -19,7 +29,7 @@ def to_numpy(x):
 
 
 
-def set_seeds(n):
+def set_seeds(n: int) -> None:
     transformers.set_seed(n)
     torch.manual_seed(n)
     np.random.seed(n)

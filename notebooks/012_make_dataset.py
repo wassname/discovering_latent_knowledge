@@ -51,7 +51,16 @@ parser = ArgumentParser(add_help=False)
 parser.add_arguments(ExtractConfig, dest="run")
 
 # argv="""\
-# "WizardLM/WizardCoder-3B-V1.0" \
+# "WizardLM/WizardCoder-Python-13B-V1.0" \
+# imdb amazon_polarity super_glue:boolq glue:qnli \
+# --max_examples 260 260 \
+# --max_length=600 \
+# --num_shots=1 \
+# """.strip().replace('\n','').split()
+# print(argv)
+
+# argv="""\
+# "HuggingFaceH4/starchat-beta" \
 # imdb amazon_polarity super_glue:boolq glue:qnli \
 # --max_examples 260 260 \
 # --max_length=600 \
@@ -81,7 +90,7 @@ def load_model(model_repo = "HuggingFaceH4/starchat-beta"):
     model_options = dict(
         device_map="auto",
         # load_in_8bit=True,
-        # load_in_4bit=True,
+        load_in_4bit=True,
         torch_dtype=torch.float16, # note because datasets pickles the model into numpy to get the unique datasets name, and because numpy doesn't support bfloat16, we need to use float16
         # use_safetensors=False,
     )
@@ -273,7 +282,6 @@ ds_names = cfg.datasets
 split_type = "train"
 
 model, tokenizer = load_model(cfg.model)
-model.cuda()
 
 def row_choice_ids(r):
     return choice2ids([[c] for c in r['answer_choices']], tokenizer)
@@ -362,6 +370,22 @@ for ds_name in ds_names:
 
     # ## Add labels
     # For our probe. Given next_token scores (logits) we take only the subset the corresponds to our negative tokens (e.g. False, no, ...) and positive tokens (e.g. Yes, yes, affirmative, ...).
+    def expand_choices(choices: List[str]) -> List[str]:
+        """expand out choices by adding versions that are upper, lower, whitespace, etc"""
+        new = []
+        for c in choices:
+            new.append(c)
+            new.append(c.upper())
+            new.append(c.capitalize())
+            new.append(c.lower())
+        return set(new)
+
+
+    left_choices = list(r[0] for r in ds1['answer_choices'])+['no', 'false', 'negative', 'wrong']
+    right_choices = list(r[1] for r in ds1['answer_choices'])+['yes', 'true', 'positive', 'right']
+    left_choices, right_choices = expand_choices(left_choices), expand_choices(right_choices)
+    expanded_choices = [left_choices, right_choices]
+    expanded_choice_ids = choice2ids(expanded_choices, tokenizer)
 
     # this is just based on pairs for that answer...
     add_txt_ans0 = lambda r: {'txt_ans0': tokenizer.decode(r['scores0'].argmax(-1))}
@@ -370,10 +394,12 @@ for ds_name in ds_names:
     add_ans = lambda r: scores2choice_probs(r, row_choice_ids(r), keys=["scores0"])
 
     # Or all expanded choices
+    add_ans_exp = lambda r: scores2choice_probs(r, expanded_choice_ids, prefix="expanded_")
     ds1.set_format(type='numpy')#, columns=['input_ids', 'token_type_ids', 'attention_mask', 'label'])
     ds3 = (
         ds1
         .map(add_ans)
+        .map(add_ans_exp)
         .map(add_txt_ans0)
     )
 

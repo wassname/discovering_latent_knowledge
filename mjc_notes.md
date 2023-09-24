@@ -1546,3 +1546,20 @@ print(pd.Series(ds_tokens['instructed_to_lie']).value_counts()) # should be 50%
 
 
 Ah found it :brain: it was using the same random seed. so I was selecting the Nth each time, which happened to be diff for each dataset. But was the same template and type. OK now I can redo.
+
+
+try with
+- https://huggingface.co/TheBloke/CodeLlama-34B-fp16
+- WizardLM/WizardCoder-Python-13B-V1.0
+
+
+```
+python notebooks/012_make_dataset.py \
+"HuggingFaceH4/starchat-beta" \
+amazon_polarity super_glue:boolq glue:qnli imdb \
+--max_examples 260 260 \
+--max_length=600
+```
+what are fim tokens? Fill-in-the-middle
+
+Fill-in-the-middle uses special tokens to identify the prefix/middle/suffix part of the input and output:

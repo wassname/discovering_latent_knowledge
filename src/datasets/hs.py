@@ -76,7 +76,6 @@ class ExtractHiddenStates:
         choice_ids: List[torch.Tensor] = None,
         truncation_length=999,
         debug=False,
-        counterfactual_fwd=True,
     ):
         """
         Given a decoder model and a batch of texts, gets a pair of hidden states (in a given layer) on that input texts
@@ -103,62 +102,70 @@ class ExtractHiddenStates:
 
         # forward pass
         last_token = -1
+        # for WizardLM/WizardCoder-3B-V1.0
         HEADS = [f"transformer.h.{i}.attn.c_proj" for i in range(self.model.config.num_hidden_layers)]
         MLPS = [f"transformer.h.{i}.mlp" for i in range(self.model.config.num_hidden_layers)]
+        
+        # for "WizardLM/WizardCoder-Python-13B-V1.0"
+        HEADS = [f"model.layers.{i}.self_attn" for i in range(self.model.config.num_hidden_layers)]
+        MLPS = [f"model.layers.{i}.mlp" for i in range(self.model.config.num_hidden_layers)]
+        
+        layers = HEADS+MLPS
+        module_names = [k for k,v in self.model.named_modules()]
+        layers_not_found = set(layers)-set(module_names)
+        assert len(layers_not_found)==0, f"some layers not found in model: {layers_not_found}. we have {layers}"
         
         self.model.eval()
         outs = []
         with TraceDict(self.model, HEADS+MLPS, retain_grad=True, detach=True) as ret:
-            # with torch.autocast('cuda', torch.bfloat16): # FIXME not reccomended for backwards pass
-            # Forward for one step is the same as greedy generation for one step
-            # https://github.com/huggingface/transformers/blob/234cfefbb083d2614a55f6093b0badfb2efc3b45/src/transformers/generation_utils.py#L1528
-            inputs_embeds = self.model.transformer.wte(input_ids)
-            for _ in range(2):                
-                epsilon=2e-2
-                noise = inputs_embeds.data.new(inputs_embeds.size()).normal_(0, 1) *  epsilon
-                inputs_embeds_w_noise = inputs_embeds + noise
-                model_inputs = self.model.prepare_inputs_for_generation(input_ids=None, inputs_embeds=inputs_embeds_w_noise, attention_mask=attention_mask, use_cache=False)
-                outputs = self.model.forward(
-                    **model_inputs,
-                    return_dict=True,
-                    output_hidden_states=True,
-                )
-                scores = outputs["scores"] = outputs.logits[:, last_token, :].float()
-                token_n = choice_ids[:, 0] # [batch, tokens]
-                token_y = choice_ids[:, 1]
-                    
-                loss = counterfactual_loss(self.model, scores, token_y, token_n)  
-                
-                loss.backward()
-
-                # stack
-                hidden_states = list(outputs.hidden_states)
-                hidden_states = rearrange(hidden_states, 'lyrs b seq hs -> b lyrs seq hs')[:, :, last_token]
-                ## from ret, we get the layer activation and the grads on them
-                head_activation = tcopy(stack_trace_returns(ret, HEADS))
-                mlp_activation = tcopy(stack_trace_returns(ret, MLPS))
-                residual_stream = head_activation + mlp_activation
-                
-                # select only some layers
-                layers = self.get_layer_selection(outputs)
-                residual_stream = residual_stream[:, layers]
-                hidden_states = hidden_states[:, layers]    
-
-                # collect outputs
-                out = dict(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    scores=outputs["scores"],
-                    layers=layers,
-                    hidden_states=hidden_states,            
-                    residual_stream=residual_stream,
-                )
+            with torch.autocast('cuda', torch.bfloat16):
+                # Forward for one step is the same as greedy generation for one step
+                # https://github.com/huggingface/transformers/blob/234cfefbb083d2614a55f6093b0badfb2efc3b45/src/transformers/generation_utils.py#L1528
+                inputs_embeds = self.model.transformer.wte(input_ids)
+                for _ in range(2):                
+                    epsilon=inputs_embeds.abs().mean()*2 # TODO: this worked well for one prompt. Not too differen't, not to simialr. But it's a magic number
+                    noise = inputs_embeds.data.new(inputs_embeds.size()).normal_(0, 1) *  epsilon
+                    inputs_embeds_w_noise = inputs_embeds + noise
+                    model_inputs = self.model.prepare_inputs_for_generation(input_ids=None, inputs_embeds=inputs_embeds_w_noise, attention_mask=attention_mask, use_cache=False)
+                    outputs = self.model.forward(
+                        **model_inputs,
+                        return_dict=True,
+                        output_hidden_states=True,
+                    )
+                    scores = outputs["scores"] = outputs.logits[:, last_token, :].float()
+                    # token_n = choice_ids[:, 0] # [batch, tokens]
+                    # token_y = choice_ids[:, 1]
                         
-                if debug:            
-                    out['input_truncated'] = self.tokenizer.batch_decode(input_ids)
-                    out['text_ans'] = self.tokenizer.batch_decode(outputs["scores"].argmax(-1))
-                out = {k: detachcpu(v) for k, v in out.items()}
-                outs.append(out)
+                    # loss = counterfactual_loss(self.model, scores, token_y, token_n)
+
+                    # stack
+                    hidden_states = list(outputs.hidden_states)
+                    hidden_states = rearrange(hidden_states, 'lyrs b seq hs -> b lyrs seq hs')[:, :, last_token]
+                    ## from ret, we get the layer activation and the grads on them
+                    head_activation = tcopy(stack_trace_returns(ret, HEADS))
+                    mlp_activation = tcopy(stack_trace_returns(ret, MLPS))
+                    residual_stream = head_activation + mlp_activation
+                    
+                    # select only some layers
+                    layers = self.get_layer_selection(outputs)
+                    residual_stream = residual_stream[:, layers]
+                    hidden_states = hidden_states[:, layers]    
+
+                    # collect outputs
+                    out = dict(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        scores=outputs["scores"],
+                        layers=layers,
+                        hidden_states=hidden_states,            
+                        residual_stream=residual_stream,
+                    )
+                            
+                    if debug:            
+                        out['input_truncated'] = self.tokenizer.batch_decode(input_ids)
+                        out['text_ans'] = self.tokenizer.batch_decode(outputs["scores"].softmax(-1).argmax(-1))
+                    out = {k: detachcpu(v) for k, v in out.items()}
+                    outs.append(out)
             
         # I shouldn't have to do this but I get memory leaks
         outputs = hidden_states = hidden_states2 = loss = orig_state_dict = scores = token_y = token_n = input_ids = attention_mask = choice_ids = residual_stream = residual_stream2 = None
@@ -169,16 +176,22 @@ class ExtractHiddenStates:
 
     def get_layer_selection(self, outputs):
         """Sometimes we don't want to save all layers.
+        
+        We skip the first few (data leakage?). Stride the the middle (could be valuable), and include the last few (possibly high level concepts).
 
-        Typically we can skip some to save space (stride). We might also want to ignore the first and last ones (padding) to avoid data leakage.
-
-        See https://www.lesswrong.com/posts/bWxNPMy5MhPnQTzKz/what-discovering-latent-knowledge-did-and-did-not-find-4
+        See also https://www.lesswrong.com/posts/bWxNPMy5MhPnQTzKz/what-discovering-latent-knowledge-did-and-did-not-find-4
         """
-        return torch.arange(
+        # for self.layer_padding, skip the first few
+        strided_layers = torch.arange(
             self.layer_padding,
-            len(outputs["hidden_states"])-1 - self.layer_padding,
-            self.layer_stride,
+            len(outputs["hidden_states"])-1,
+            self.layer_stride-self.layer_padding,
         )
+        # for self.layer_padding ALWAYS include the last few. Why, this is based on the intuition that the last layers may be the most valuable
+        last_few = torch.arange(self.layer_padding-self.layer_padding, self.layer_padding)
+        layers = strided_layers+last_few
+        # TODO: check for dups
+        return layers
 
 def detachcpu(x):
     """

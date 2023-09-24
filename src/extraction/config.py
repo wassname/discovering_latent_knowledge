@@ -36,7 +36,7 @@ class ExtractConfig(Serializable):
     """Shortcut for `layers = (0,) + tuple(range(1, num_layers + 1, stride))`."""
     
     layer_padding: InitVar[int] = 4
-    """Clips the first and last layers by this amount"""
+    """Clips the first layers by this amount"""
 
     seed: int = 42
     """Seed to use for prompt randomization. Defaults to 42."""
