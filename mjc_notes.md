@@ -1560,6 +1560,44 @@ amazon_polarity super_glue:boolq glue:qnli imdb \
 --max_examples 260 260 \
 --max_length=600
 ```
+
+```sh
+python notebooks/012_make_dataset.py \
+--max_examples 260 260 \
+--max_length=600
+```
 what are fim tokens? Fill-in-the-middle
 
 Fill-in-the-middle uses special tokens to identify the prefix/middle/suffix part of the input and output:
+
+
+TheBloke/WizardCoder-Python-13B-V1.0-GPTQ
+
+problem everything is tokenizers as unk? wtftoke
+
+
+hmm for the llama tokenizer
+
+'\nNegative' ' negative', and 'negative' are all differen't?
+
+In particular for Decrease. \nDec is 13 6185
+while ' Dec' and 'Dec' both end in 3826
+
+  ({'input_ids': [1, 4874], 'attention_mask': [1, 1]}, ['<s>', 'yes'])
+  `[' yes']`=>[29871, 4874]=>['', 'yes']
+  `['\nyes']`=>[29871, 13, 3582]=>['', '\n', 'yes']
+  `['yes']`=>[4874]=>['yes']
+  `['yes\n']`=>[4874, 13]=>['yes', '\n']
+  `['yes ']`=>[4874, 29871]=>['yes', '']
+  `[' yes']`=>[1, 29871, 4874]=>['<s>', '', 'yes']
+  `['\nyes']`=>[1, 29871, 13, 3582]=>['<s>', '', '\n', 'yes']
+  `['yes']`=>[1, 4874]=>['<s>', 'yes']
+  `['yes\n']`=>[1, 4874, 13]=>['<s>', 'yes', '\n']
+  `['yes ']`=>[1, 4874, 29871]=>['<s>', 'yes', '']
+
+
+# UPTO
+
+for some reason all the ans are unknown
+- [x] debug at `expanded_choice_ids` in file 012, to fix it 
+- collect a dataset, and experiment with noise on the embeddings

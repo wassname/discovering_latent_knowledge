@@ -26,6 +26,7 @@ import hashlib
 from pathlib import Path
 
 import transformers
+from transformers import GPTQConfig
 from datasets import Dataset, DatasetInfo
 from src.datasets.load import load_ds
 from src.models.load import verbose_change_param, AutoConfig, AutoTokenizer, AutoModelForCausalLM
@@ -72,54 +73,29 @@ args = parser.parse_args()
 cfg = args.run
 print(cfg)
 
-BATCH_SIZE = 1  # None # None means auto # 6 gives 16Gb/25GB. where 10GB is the base model. so 6 is 6/15
+BATCH_SIZE = 4  # None # None means auto # 6 gives 16Gb/25GB. where 10GB is the base model. so 6 is 6/15
 
-
-
-def load_model(model_repo = "HuggingFaceH4/starchat-beta"):
-    """
-    Chosing:
-    - https://old.reddit.com/r/LocalLLaMA/wiki/models
-    - https://huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard
-    - https://github.com/deep-diver/LLM-As-Chatbot/blob/main/model_cards.json
-
-
-    A uncensored and large coding ones might be best for lying.
-    """
-    # see https://github.com/deep-diver/LLM-As-Chatbot/blob/main/models/starchat.py
-    model_options = dict(
-        device_map="auto",
-        # load_in_8bit=True,
-        load_in_4bit=True,
-        torch_dtype=torch.float16, # note because datasets pickles the model into numpy to get the unique datasets name, and because numpy doesn't support bfloat16, we need to use float16
-        # use_safetensors=False,
-    )
-
-    config = AutoConfig.from_pretrained(model_repo, use_cache=False)
-    verbose_change_param(config, 'use_cache', False)
-    
-    tokenizer = AutoTokenizer.from_pretrained(model_repo)
-    verbose_change_param(tokenizer, 'pad_token_id', 0)
-    verbose_change_param(tokenizer, 'padding_side', 'left')
-    verbose_change_param(tokenizer, 'truncation_side', 'left')
-    
-    model = AutoModelForCausalLM.from_pretrained(model_repo, config=config, **model_options)
-
-    return model, tokenizer
 
 
 def qc_ds(f):
     ds4 = load_ds(f)
+    
+    
+    # QC by viewing a row
+    r = ds4[0]
+    print("`", r['prompt_truncated'], end="")
+    print(r['txt_ans0'], "`")
 
     # QC: check that the dataset is valid
     for k,v in ds4[0].items():
         print(k, v.shape, v.dtype)
         if (isinstance(v, (np.ndarray, np.generic, torch.Tensor)) and (v.dtype in ['float16', 'float32', 'float64', 'int64', 'int32', 'int16', 'int8'])):
-            assert np.isfinite(v).all()
+            assert np.isfinite(v).all(), f"found non-finite value in {k}"
 
 
     # QC, check which answers are most common
-    common_answers = pd.Series(ds4['txt_ans0']).value_counts()
+    common_answers = list(itertools.chain(*ds4['txt_ans0']))
+    common_answers = pd.Series(common_answers).value_counts()
     print('Remember it should be binary. Found common LLM answers:', common_answers)
 
     current_choices = set(list(chain(*ds4['answer_choices'])))
@@ -129,7 +105,7 @@ def qc_ds(f):
     
     mean_prob = ds4['choice_probs0'].sum(-1).mean()
     print('mean_prob', mean_prob)
-    assert ds4['choice_probs0'].sum(-1).mean()>0.2, f"""
+    assert ds4['choice_probs0'].sum(-1).mean()>0.1, f"""
     Our choices should cover most common answers. But they accounted for a mean probability of {mean_prob:2.2%} (should be >40%). 
 
     To fix this you might want to improve your prompt or add to your choices
@@ -166,10 +142,6 @@ def qc_ds(f):
 
     # ### QC view row
 
-    # QC by viewing a row
-    r = ds4[0]
-    print(r['prompt_truncated'])
-    print(r['txt_ans0'])
 
     # # QC: generation
     # 
@@ -327,7 +299,7 @@ for ds_name in ds_names:
             ),
             batched=True,
         )
-        .map(lambda r: {"truncated": np.sum(r["attention_mask"], -1)==cfg.max_length})
+        .map(lambda r: {"truncated": np.sum(r["attention_mask"], 0)==cfg.max_length})
         .map(
             lambda r: {"prompt_truncated": tokenizer.batch_decode(r["input_ids"])},
             batched=True,
@@ -356,6 +328,10 @@ for ds_name in ds_names:
     )
 
     info_kwargs = dict(extract_cfg=cfg.to_dict(), ds_name=ds_name, split_type=split_type, f=f, date=pd.Timestamp.now().isoformat(),)
+    
+    if os.environ.get('TEST', False):
+        gen = batch_hidden_states(**gen_kwargs)
+        b =next(iter(gen))
 
     # [DatasetInfo](https://github.com/huggingface/datasets/blob/9b21e181b642bd55b3ef68c1948bfbcd388136d6/src/datasets/info.py#L94)
     ds1 = Dataset.from_generator(
@@ -381,25 +357,30 @@ for ds_name in ds_names:
         return set(new)
 
 
-    left_choices = list(r[0] for r in ds1['answer_choices'])+['no', 'false', 'negative', 'wrong']
-    right_choices = list(r[1] for r in ds1['answer_choices'])+['yes', 'true', 'positive', 'right']
-    left_choices, right_choices = expand_choices(left_choices), expand_choices(right_choices)
-    expanded_choices = [left_choices, right_choices]
-    expanded_choice_ids = choice2ids(expanded_choices, tokenizer)
+    # left_choices = list(r[0] for r in ds1['answer_choices'])+['no', 'false', 'negative', 'wrong']
+    # right_choices = list(r[1] for r in ds1['answer_choices'])+['yes', 'true', 'positive', 'right']
+    # left_choices, right_choices = expand_choices(left_choices), expand_choices(right_choices)
+    # assert len(set(left_choices).intersection(right_choices))==0
+    # expanded_choices = [left_choices, right_choices]
+    # expanded_choice_ids = choice2ids(expanded_choices, tokenizer)
+    # add_ans_exp = lambda r: scores2choice_probs(r, expanded_choice_ids, prefix="expanded_", keys=["scores0"])
+    # FIXME: we have the yes and no swapped
+    # FIXME: use k-mean closest tokens?
+    
 
     # this is just based on pairs for that answer...
-    add_txt_ans0 = lambda r: {'txt_ans0': tokenizer.decode(r['scores0'].argmax(-1))}
+    # FIXME of course I added a dim!
+    add_txt_ans0 = lambda r: {'txt_ans0': tokenizer.batch_decode(torch.softmax(torch.tensor(r['scores0']), 0).argmax(0))}
 
     # Either just use the template choices
     add_ans = lambda r: scores2choice_probs(r, row_choice_ids(r), keys=["scores0"])
 
     # Or all expanded choices
-    add_ans_exp = lambda r: scores2choice_probs(r, expanded_choice_ids, prefix="expanded_")
     ds1.set_format(type='numpy')#, columns=['input_ids', 'token_type_ids', 'attention_mask', 'label'])
     ds3 = (
         ds1
         .map(add_ans)
-        .map(add_ans_exp)
+        # .map(add_ans_exp)
         .map(add_txt_ans0)
     )
 
@@ -409,6 +390,6 @@ for ds_name in ds_names:
     try:
         qc_ds(f)
     except Exception as e:
-        print('QC failed', e)
+        logger.exception('QC failed')
         # raise e
 

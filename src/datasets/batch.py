@@ -35,23 +35,22 @@ def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, layer_pad
         index = i*batch_size+np.arange(nn)
         
         # different due to dropout
-        hs0 = ehs.get_batch_of_hidden_states(input_ids=input_ids, attention_mask=attention_mask, choice_ids=choice_ids)
+        hsl = ehs.get_batch_of_hidden_states(input_ids=input_ids, attention_mask=attention_mask, choice_ids=choice_ids)
         
         for j in range(nn):
             # let's add the non torch metadata like label, prompt, lie, etc
             k = i*batch_size + j
             info = ds_p_subset[k]
             
-            large_arrays_keys = [k for k,v in hs0.items() if v.ndim>2]
-            large_arrays_as_int16 = {
-                # k:float_to_int16(hs0[k][j])
-                k:hs0[k][j] 
-                for k in large_arrays_keys}
+            large_arrays_keys = [k for k,v in hsl.items() if isinstance(v, torch.Tensor) and v.ndim>2]
+            
+            # TODO deal with multiple lists of hs in hs0
+            large_arrays_as_int16 = {k:hsl[k][j] for k in large_arrays_keys}
             
             yield dict(
                 
                 # large_arrays_keys=large_arrays_keys,
-                scores0=hs0["scores"][j],            
+                scores0=hsl["scores"][j],            
                 
                 ds_index=index[j],
                 
@@ -61,6 +60,6 @@ def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, layer_pad
                 **info
             )
             
-        info = large_arrays_as_int16= hs0 = None
+        info = large_arrays_as_int16= hsl = None
         clear_mem()
 

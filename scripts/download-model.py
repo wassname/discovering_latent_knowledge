@@ -1,6 +1,6 @@
 import os
 # disable cuda
-os.environ['CUDA_VISIBLE_DEVICES']="-1"
+# os.environ['CUDA_VISIBLE_DEVICES']="-1"
 import torch
 import argparse
 import pandas as pd
@@ -9,26 +9,26 @@ from huggingface_hub.constants import HUGGINGFACE_HUB_CACHE
 from pathlib import Path
 
 model_options = dict(
-    device_map="auto", 
+    device_map="cpu", 
     # load_in_8bit=True, # not with cpu
-    torch_dtype=torch.float16,
-    trust_remote_code=True
+    # torch_dtype=torch.float16,
+    # trust_remote_code=True
 )
 
 def main(model_repo, lora_repo = None, **download_options):
     tokenizer = AutoTokenizer.from_pretrained(model_repo, **download_options)
     model = AutoModelForCausalLM.from_pretrained(model_repo, **model_options, **download_options)
-
-    if lora_repo is not None:
-        # https://github.com/tloen/alpaca-lora/blob/main/generate.py#L40
-        from peft import PeftModel
-        model = PeftModel.from_pretrained(
-            model,
-            lora_repo, 
-            torch_dtype=torch.float16,
-            device_map='auto',
-            **download_options
-        )
+    # # FIXME move to gptq
+    # if lora_repo is not None:
+    #     # https://github.com/tloen/alpaca-lora/blob/main/generate.py#L40
+    #     from peft import PeftModel
+    #     model = PeftModel.from_pretrained(
+    #         model,
+    #         lora_repo, 
+    #         torch_dtype=torch.float16,
+    #         device_map='auto',
+    #         **download_options
+    #     )
 
 def sizeof_fmt(num, suffix="B"):
     for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:

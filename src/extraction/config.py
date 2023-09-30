@@ -6,11 +6,11 @@ from typing import Literal
 class ExtractConfig(Serializable):
     """Config for extracting hidden states from a language model."""
 
-    model: str = field(positional=True)
-    """HF model string identifying the language model to extract hidden states from."""
-
-    datasets: tuple[str, ...] = field(positional=True)
+    datasets: tuple[str, ...] = ("amazon_polarity",  "super_glue:boolq", "glue:qnli", "imdb")
     """Names of HF datasets to use, e.g. `"super_glue:boolq"` or `"imdb"` `"glue:qnli"""
+    
+    model: str = "TheBloke/WizardCoder-Python-13B-V1.0-GPTQ"
+    """HF model string identifying the language model to extract hidden states from."""
 
     data_dirs: tuple[str, ...] = ()
     """Directory to use for caching the hiddens. Defaults to `HF_DATASETS_CACHE`."""

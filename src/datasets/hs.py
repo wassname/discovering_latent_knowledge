@@ -29,6 +29,7 @@ from baukit.nethook import Trace, TraceDict, recursive_copy
 from einops import rearrange, reduce, repeat
 from src.datasets.scores import choice2id, choice2ids
 from src.helpers.torch import clear_mem
+from collections import defaultdict
 
 
 def tcopy(x: torch.Tensor):
@@ -48,16 +49,17 @@ def counterfactual_loss(model, scores, token_y, token_n):
 
 def stack_trace_returns(ret: TraceDict, names: List[str]) -> torch.Tensor:
     hs = [ret[h].output for h in names]
+    hs = [h[0] if isinstance(h, tuple) else h for h in hs]
     return rearrange(hs, 'layers b s hs -> b layers s hs')[:, :, -1]
 
-def stack_trace_grad_returns(ret: TraceDict, names: List[str]) -> torch.Tensor:
-    hs = [ret[h].output.grad.detach() for h in names]
-    return rearrange(hs, 'layers b s hs -> b layers s hs')[:, :, -1]
+# def stack_trace_grad_returns(ret: TraceDict, names: List[str]) -> torch.Tensor:
+#     hs = [ret[h].output.grad.detach() for h in names]
+#     return rearrange(hs, 'layers b s hs -> b layers s hs')[:, :, -1]
 
-def select_weight_grads(weight_grads: Dict[str, torch.Tensor], pattern:str= ".+attn.c_proj.weight", mean_axis:int=1):
-    grads = [g.mean(mean_axis) for k,g in weight_grads.items() if re.match(pattern, k)]
-    assert len(grads), f"non of pattern='{pattern}' found in {weight_grads.keys()}"
-    return rearrange(grads, "lyrs b hs -> b lyrs hs")
+# def select_weight_grads(weight_grads: Dict[str, torch.Tensor], pattern:str= ".+attn.c_proj.weight", mean_axis:int=1):
+#     grads = [g.mean(mean_axis) for k,g in weight_grads.items() if re.match(pattern, k)]
+#     assert len(grads), f"non of pattern='{pattern}' found in {weight_grads.keys()}"
+#     return rearrange(grads, "lyrs b hs -> b lyrs hs")
         
 @dataclass
 class ExtractHiddenStates:
@@ -103,74 +105,79 @@ class ExtractHiddenStates:
         # forward pass
         last_token = -1
         # for WizardLM/WizardCoder-3B-V1.0
-        HEADS = [f"transformer.h.{i}.attn.c_proj" for i in range(self.model.config.num_hidden_layers)]
-        MLPS = [f"transformer.h.{i}.mlp" for i in range(self.model.config.num_hidden_layers)]
+        # HEADS = [f"transformer.h.{i}.attn.c_proj" for i in range(self.model.config.num_hidden_layers)]
+        # MLPS = [f"transformer.h.{i}.mlp" for i in range(self.model.config.num_hidden_layers)]
         
         # for "WizardLM/WizardCoder-Python-13B-V1.0"
+        # HACK: depends on model layout
         HEADS = [f"model.layers.{i}.self_attn" for i in range(self.model.config.num_hidden_layers)]
         MLPS = [f"model.layers.{i}.mlp" for i in range(self.model.config.num_hidden_layers)]
         
-        layers = HEADS+MLPS
+        layers_names = HEADS+MLPS
         module_names = [k for k,v in self.model.named_modules()]
-        layers_not_found = set(layers)-set(module_names)
-        assert len(layers_not_found)==0, f"some layers not found in model: {layers_not_found}. we have {layers}"
+        layers_not_found = set(layers_names)-set(module_names)
+        assert len(layers_not_found)==0, f"some layers not found in model: {layers_not_found}. we have {layers_names}"
         
         self.model.eval()
         outs = []
         with TraceDict(self.model, HEADS+MLPS, retain_grad=True, detach=True) as ret:
-            with torch.autocast('cuda', torch.bfloat16):
-                # Forward for one step is the same as greedy generation for one step
-                # https://github.com/huggingface/transformers/blob/234cfefbb083d2614a55f6093b0badfb2efc3b45/src/transformers/generation_utils.py#L1528
-                inputs_embeds = self.model.transformer.wte(input_ids)
-                for _ in range(2):                
-                    epsilon=inputs_embeds.abs().mean()*2 # TODO: this worked well for one prompt. Not too differen't, not to simialr. But it's a magic number
-                    noise = inputs_embeds.data.new(inputs_embeds.size()).normal_(0, 1) *  epsilon
-                    inputs_embeds_w_noise = inputs_embeds + noise
-                    model_inputs = self.model.prepare_inputs_for_generation(input_ids=None, inputs_embeds=inputs_embeds_w_noise, attention_mask=attention_mask, use_cache=False)
-                    outputs = self.model.forward(
-                        **model_inputs,
-                        return_dict=True,
-                        output_hidden_states=True,
-                    )
-                    scores = outputs["scores"] = outputs.logits[:, last_token, :].float()
-                    # token_n = choice_ids[:, 0] # [batch, tokens]
-                    # token_y = choice_ids[:, 1]
-                        
-                    # loss = counterfactual_loss(self.model, scores, token_y, token_n)
+            # Forward for one step is the same as greedy generation for one step
+            # https://github.com/huggingface/transformers/blob/234cfefbb083d2614a55f6093b0badfb2efc3b45/src/transformers/generation_utils.py#L1528
+            # HACK: depends on model layout
+            inputs_embeds = self.model.model.embed_tokens(input_ids)
+            
+            multi_outs = defaultdict(list)
+            for _ in range(3):                
+                epsilon=inputs_embeds.abs().mean()*2 # TODO: this worked well for one prompt. Not too differen't, not to simialr. But it's a magic number
+                noise = inputs_embeds.data.new(inputs_embeds.size()).normal_(0, 1) *  epsilon
+                inputs_embeds_w_noise = inputs_embeds + noise
+                model_inputs = self.model.prepare_inputs_for_generation(input_ids=None, inputs_embeds=inputs_embeds_w_noise, attention_mask=attention_mask, use_cache=False)
+                outputs = self.model.forward(
+                    **model_inputs,
+                    return_dict=True,
+                    output_hidden_states=True,
+                )
+                outputs["scores"] = outputs.logits[:, last_token, :].float()
 
-                    # stack
-                    hidden_states = list(outputs.hidden_states)
-                    hidden_states = rearrange(hidden_states, 'lyrs b seq hs -> b lyrs seq hs')[:, :, last_token]
-                    ## from ret, we get the layer activation and the grads on them
-                    head_activation = tcopy(stack_trace_returns(ret, HEADS))
-                    mlp_activation = tcopy(stack_trace_returns(ret, MLPS))
-                    residual_stream = head_activation + mlp_activation
-                    
-                    # select only some layers
-                    layers = self.get_layer_selection(outputs)
-                    residual_stream = residual_stream[:, layers]
-                    hidden_states = hidden_states[:, layers]    
+                # stack
+                hidden_states = list(outputs.hidden_states)
+                hidden_states = rearrange(hidden_states, 'lyrs b seq hs -> b lyrs seq hs')[:, :, last_token]
+                ## from ret, we get the layer activation and the grads on them
+                head_activation = tcopy(stack_trace_returns(ret, HEADS))
+                mlp_activation = tcopy(stack_trace_returns(ret, MLPS))
+                residual_stream = head_activation + mlp_activation
+                
+                # select only some layers
+                layer_inds = self.get_layer_selection(outputs)
+                residual_stream = residual_stream[:, layer_inds]
+                hidden_states = hidden_states[:, layer_inds]    
 
-                    # collect outputs
-                    out = dict(
-                        input_ids=input_ids,
-                        attention_mask=attention_mask,
-                        scores=outputs["scores"],
-                        layers=layers,
-                        hidden_states=hidden_states,            
-                        residual_stream=residual_stream,
-                    )
-                            
-                    if debug:            
-                        out['input_truncated'] = self.tokenizer.batch_decode(input_ids)
-                        out['text_ans'] = self.tokenizer.batch_decode(outputs["scores"].softmax(-1).argmax(-1))
-                    out = {k: detachcpu(v) for k, v in out.items()}
-                    outs.append(out)
+                # collect outputs
+                multi_outs['scores'].append(outputs["scores"])
+                multi_outs['hidden_states'].append(hidden_states)
+                multi_outs['residual_stream'].append(residual_stream)
+            
+            # stack
+            multi_outs['scores'] = torch.stack(multi_outs['scores'], -1)
+            multi_outs['hidden_states'] = torch.stack(multi_outs['hidden_states'], -1)
+            multi_outs['residual_stream'] = torch.stack(multi_outs['residual_stream'], -1)
+            
+            # combine
+            out_common = dict(input_ids=input_ids, attention_mask=attention_mask, layers=layer_inds,)
+            if debug:            
+                out_common['input_truncated'] = self.tokenizer.batch_decode(input_ids)
+                out_common['text_ans'] = self.tokenizer.batch_decode(outputs["scores"].softmax(-1).argmax(-1))
+            
+            out = {**multi_outs, **out_common}
+            
+            # detach
+            out = {k: detachcpu(v) for k, v in out.items()}
+            
             
         # I shouldn't have to do this but I get memory leaks
         outputs = hidden_states = hidden_states2 = loss = orig_state_dict = scores = token_y = token_n = input_ids = attention_mask = choice_ids = residual_stream = residual_stream2 = None
         clear_mem()            
-        return outs
+        return out
     
     
 
@@ -182,14 +189,15 @@ class ExtractHiddenStates:
         See also https://www.lesswrong.com/posts/bWxNPMy5MhPnQTzKz/what-discovering-latent-knowledge-did-and-did-not-find-4
         """
         # for self.layer_padding, skip the first few
+        num_layers = len(outputs["hidden_states"])-1
         strided_layers = torch.arange(
             self.layer_padding,
-            len(outputs["hidden_states"])-1,
-            self.layer_stride-self.layer_padding,
-        )
+            num_layers-self.layer_padding,
+            self.layer_stride,
+        ).tolist()
         # for self.layer_padding ALWAYS include the last few. Why, this is based on the intuition that the last layers may be the most valuable
-        last_few = torch.arange(self.layer_padding-self.layer_padding, self.layer_padding)
-        layers = strided_layers+last_few
+        last_few = torch.arange(num_layers-self.layer_padding, num_layers).tolist()
+        layers = sorted(set(list(strided_layers)+list(last_few)))
         # TODO: check for dups
         return layers
 
