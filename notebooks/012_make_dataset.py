@@ -298,13 +298,15 @@ for ds_name in ds_names:
                 # return_overflowing_tokens=True,
             ),
             batched=True,
+            desc='tokenize'
         )
-        .map(lambda r: {"truncated": np.sum(r["attention_mask"], 0)==cfg.max_length})
+        .map(lambda r: {"truncated": np.sum(r["attention_mask"], 0)==cfg.max_length}, desc='truncated')
         .map(
             lambda r: {"prompt_truncated": tokenizer.batch_decode(r["input_ids"])},
             batched=True,
+            desc='prompt_truncated',
         )
-        .map(lambda r: {'choice_ids': row_choice_ids(r)})
+        .map(lambda r: {'choice_ids': row_choice_ids(r)}, desc='choice_ids')
     )
     
     
@@ -379,9 +381,9 @@ for ds_name in ds_names:
     ds1.set_format(type='numpy')#, columns=['input_ids', 'token_type_ids', 'attention_mask', 'label'])
     ds3 = (
         ds1
-        .map(add_ans)
+        .map(add_ans, desc='add_ans') # slow?
         # .map(add_ans_exp)
-        .map(add_txt_ans0)
+        .map(add_txt_ans0, desc='add_txt_ans0')
     )
 
     ds3.save_to_disk(f)

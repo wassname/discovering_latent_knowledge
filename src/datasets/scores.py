@@ -48,7 +48,7 @@ def scores2choice_probs(row, class2_ids: List[List[int]], keys=["scores0"], pref
         # out[key.replace("scores", "ansb")] = torch.tensor(scores_c).softmax(-1)[1].item()
     return out
 
-# @functools.lru_cache()
+@functools.lru_cache()
 def choice2id(tokenizer, c: str, whitespace_first=False) -> List[int]:
     """convert a choice to a single token"""
     # HACK: this whole function is messy, and specific to the llama tokenizer :(. I don't want it to fail silently, so I'm adding a few asserts. It's better to find out before 4 hours of data collection

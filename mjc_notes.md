@@ -1601,3 +1601,19 @@ while ' Dec' and 'Dec' both end in 3826
 for some reason all the ans are unknown
 - [x] debug at `expanded_choice_ids` in file 012, to fix it 
 - collect a dataset, and experiment with noise on the embeddings
+
+lets swiotch it up in dataset, so swap hs0 hs1 and label, also swap hs1 and hs2
+
+
+Wait what is our task?
+
+- We right now we are saying model(x0)>model(x1) if it's a lie. That doesn't make sense. We need to work out which one is more true! (and we just true by the mean answer... wtf). OK fix this...
+
+.. fixed and now it doesn't train, hmm
+
+
+
+- [ ] to filter to states that are diff, maybe use hs2
+
+
+Wait! why random noise!!!! Why not static noise :)! lets try that

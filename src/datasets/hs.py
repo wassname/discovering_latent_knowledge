@@ -128,8 +128,13 @@ class ExtractHiddenStates:
             
             multi_outs = defaultdict(list)
             for _ in range(3):                
-                epsilon=inputs_embeds.abs().mean()*2 # TODO: this worked well for one prompt. Not too differen't, not to simialr. But it's a magic number
-                noise = inputs_embeds.data.new(inputs_embeds.size()).normal_(0, 1) *  epsilon
+                # epsilon=inputs_embeds.abs().mean()*2 # TODO: this worked well for one prompt. Not too differen't, not to simialr. But it's a magic number
+                epsilon = 2e-2
+                seed = 42
+                with torch.random.fork_rng(devices=[self.model.device.index]):
+                    # torch.set_rng_state(seed)
+                    torch.manual_seed(seed)
+                    noise = inputs_embeds.data.new(inputs_embeds.size()).normal_(0, 1) *  epsilon
                 inputs_embeds_w_noise = inputs_embeds + noise
                 model_inputs = self.model.prepare_inputs_for_generation(input_ids=None, inputs_embeds=inputs_embeds_w_noise, attention_mask=attention_mask, use_cache=False)
                 outputs = self.model.forward(
