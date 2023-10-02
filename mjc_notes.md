@@ -1617,3 +1617,26 @@ Wait what is our task?
 
 
 Wait! why random noise!!!! Why not static noise :)! lets try that
+
+
+Hmm I still need differen't noise for each inference. I could have baseline and an obvious peterb. I could have the positive and negative peterb?
+
+0, 1, 2 -> 0, 1 -1 2, -2
+
+range(-1, 1)
+
+
+but what about differen't token lengths... hmm one noise repeated for each token....
+maybe better to intervene elsewhere like in truthfull llama
+
+It kind of worked!
+
+
+- [ ] can I just use the logprobs only?
+- [ ] can I just use the hideen states only?
+- [ ] Can I get a better score with
+  - [ ] more data
+  - [ ] bigger/small model
+  - [ ] more reg
+  - [ ] choosing the noise? like truthfull llama
+- [ ] :bug: is my quandrantright? I might be using the wrong label as my test acc doesnt match metric acc

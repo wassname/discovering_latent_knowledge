@@ -34,7 +34,7 @@ class PLRanking(pl.LightningModule):
         loss = F.smooth_l1_loss(ypred1-ypred0, y)
         # self.log(f"{stage}/loss", loss)
         
-        y_cls = switch2bool(ypred1-ypred0)
+        y_cls = ypred1>ypred0 # switch2bool(ypred1-ypred0)
         self.log(f"{stage}/acc", accuracy(y_cls, y>0, "binary"), on_epoch=True, on_step=False)
         self.log(f"{stage}/loss", loss, on_epoch=True, on_step=False)
         self.log(f"{stage}/n", len(y), on_epoch=True, on_step=False, reduce_fx=torch.sum)

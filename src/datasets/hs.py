@@ -32,6 +32,15 @@ from src.helpers.torch import clear_mem
 from collections import defaultdict
 
 
+
+def noise_for_embeds(inputs_embeds, seed=42, std = 2e-2):
+    B, S, embed_dim = inputs_embeds.shape
+    with torch.random.fork_rng(devices=[inputs_embeds.device.index]):
+        torch.manual_seed(seed)
+        noise = torch.normal(0., std, (embed_dim, ))
+        noise = repeat(noise, 't -> b s t', b=B, s=S).to(inputs_embeds.device).to(inputs_embeds.dtype)
+    return noise
+
 def tcopy(x: torch.Tensor):
     return x.clone().detach().cpu()
 
@@ -119,48 +128,43 @@ class ExtractHiddenStates:
         assert len(layers_not_found)==0, f"some layers not found in model: {layers_not_found}. we have {layers_names}"
         
         self.model.eval()
-        outs = []
-        with TraceDict(self.model, HEADS+MLPS, retain_grad=True, detach=True) as ret:
-            # Forward for one step is the same as greedy generation for one step
-            # https://github.com/huggingface/transformers/blob/234cfefbb083d2614a55f6093b0badfb2efc3b45/src/transformers/generation_utils.py#L1528
-            # HACK: depends on model layout
-            inputs_embeds = self.model.model.embed_tokens(input_ids)
-            
-            multi_outs = defaultdict(list)
-            for _ in range(3):                
-                # epsilon=inputs_embeds.abs().mean()*2 # TODO: this worked well for one prompt. Not too differen't, not to simialr. But it's a magic number
-                epsilon = 2e-2
-                seed = 42
-                with torch.random.fork_rng(devices=[self.model.device.index]):
-                    # torch.set_rng_state(seed)
-                    torch.manual_seed(seed)
-                    noise = inputs_embeds.data.new(inputs_embeds.size()).normal_(0, 1) *  epsilon
-                inputs_embeds_w_noise = inputs_embeds + noise
-                model_inputs = self.model.prepare_inputs_for_generation(input_ids=None, inputs_embeds=inputs_embeds_w_noise, attention_mask=attention_mask, use_cache=False)
-                outputs = self.model.forward(
-                    **model_inputs,
-                    return_dict=True,
-                    output_hidden_states=True,
-                )
-                outputs["scores"] = outputs.logits[:, last_token, :].float()
+        with torch.no_grad():
+            outs = []
+            with TraceDict(self.model, HEADS+MLPS, retain_grad=True, detach=True) as ret:
+                # Forward for one step is the same as greedy generation for one step
+                # https://github.com/huggingface/transformers/blob/234cfefbb083d2614a55f6093b0badfb2efc3b45/src/transformers/generation_utils.py#L1528
+                # HACK: depends on model layout
+                inputs_embeds = self.model.model.embed_tokens(input_ids)
+                    
+                noise = noise_for_embeds(inputs_embeds, seed=42)
+                multi_outs = defaultdict(list)
+                for direction in range(-1, 2):
+                    inputs_embeds_w_noise = inputs_embeds + noise * direction
+                    model_inputs = self.model.prepare_inputs_for_generation(input_ids=None, inputs_embeds=inputs_embeds_w_noise, attention_mask=attention_mask, use_cache=False)
+                    outputs = self.model.forward(
+                        **model_inputs,
+                        return_dict=True,
+                        output_hidden_states=True,
+                    )
+                    outputs["scores"] = outputs.logits[:, last_token, :].float()
 
-                # stack
-                hidden_states = list(outputs.hidden_states)
-                hidden_states = rearrange(hidden_states, 'lyrs b seq hs -> b lyrs seq hs')[:, :, last_token]
-                ## from ret, we get the layer activation and the grads on them
-                head_activation = tcopy(stack_trace_returns(ret, HEADS))
-                mlp_activation = tcopy(stack_trace_returns(ret, MLPS))
-                residual_stream = head_activation + mlp_activation
-                
-                # select only some layers
-                layer_inds = self.get_layer_selection(outputs)
-                residual_stream = residual_stream[:, layer_inds]
-                hidden_states = hidden_states[:, layer_inds]    
+                    # stack
+                    hidden_states = list(outputs.hidden_states)
+                    hidden_states = rearrange(hidden_states, 'lyrs b seq hs -> b lyrs seq hs')[:, :, last_token]
+                    ## from ret, we get the layer activation and the grads on them
+                    head_activation = tcopy(stack_trace_returns(ret, HEADS))
+                    mlp_activation = tcopy(stack_trace_returns(ret, MLPS))
+                    residual_stream = head_activation + mlp_activation
+                    
+                    # select only some layers
+                    layer_inds = self.get_layer_selection(outputs)
+                    residual_stream = residual_stream[:, layer_inds]
+                    hidden_states = hidden_states[:, layer_inds]    
 
-                # collect outputs
-                multi_outs['scores'].append(outputs["scores"])
-                multi_outs['hidden_states'].append(hidden_states)
-                multi_outs['residual_stream'].append(residual_stream)
+                    # collect outputs
+                    multi_outs['scores'].append(outputs["scores"])
+                    multi_outs['hidden_states'].append(hidden_states)
+                    multi_outs['residual_stream'].append(residual_stream)
             
             # stack
             multi_outs['scores'] = torch.stack(multi_outs['scores'], -1)
