@@ -1705,3 +1705,7 @@ We use the following linear models during evaluation:
 3. K-Means - We take an unlabelled dataset D and perform K-Means clustering with K = 2, hoping to separate high-concept and low-concept samples. We take the difference between the centroids of the two clusters as the concept direction.
 4. Mean Difference - We take the difference between the means of high-concept and low- concept samples of the data:
 5. Logistic Regression - The weights of logistic regression trained to separate Xhighl and Xlowl on some training data can be used as a concept direction as well.
+
+# 2023-10-12 13:07:28
+
+So I want to try not applying a random but by fitting to a few samples. Probobly mean difference is the easiest. Of course this would be on weights not embeddings.
