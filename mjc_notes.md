@@ -1583,17 +1583,17 @@ hmm for the llama tokenizer
 In particular for Decrease. \nDec is 13 6185
 while ' Dec' and 'Dec' both end in 3826
 
-  ({'input_ids': [1, 4874], 'attention_mask': [1, 1]}, ['<s>', 'yes'])
-  `[' yes']`=>[29871, 4874]=>['', 'yes']
-  `['\nyes']`=>[29871, 13, 3582]=>['', '\n', 'yes']
-  `['yes']`=>[4874]=>['yes']
-  `['yes\n']`=>[4874, 13]=>['yes', '\n']
-  `['yes ']`=>[4874, 29871]=>['yes', '']
-  `[' yes']`=>[1, 29871, 4874]=>['<s>', '', 'yes']
-  `['\nyes']`=>[1, 29871, 13, 3582]=>['<s>', '', '\n', 'yes']
-  `['yes']`=>[1, 4874]=>['<s>', 'yes']
-  `['yes\n']`=>[1, 4874, 13]=>['<s>', 'yes', '\n']
-  `['yes ']`=>[1, 4874, 29871]=>['<s>', 'yes', '']
+    ({'input_ids': [1, 4874], 'attention_mask': [1, 1]}, ['<s>', 'yes'])
+    `[' yes']`=>[29871, 4874]=>['', 'yes']
+    `['\nyes']`=>[29871, 13, 3582]=>['', '\n', 'yes']
+    `['yes']`=>[4874]=>['yes']
+    `['yes\n']`=>[4874, 13]=>['yes', '\n']
+    `['yes ']`=>[4874, 29871]=>['yes', '']
+    `[' yes']`=>[1, 29871, 4874]=>['<s>', '', 'yes']
+    `['\nyes']`=>[1, 29871, 13, 3582]=>['<s>', '', '\n', 'yes']
+    `['yes']`=>[1, 4874]=>['<s>', 'yes']
+    `['yes\n']`=>[1, 4874, 13]=>['<s>', 'yes', '\n']
+    `['yes ']`=>[1, 4874, 29871]=>['<s>', 'yes', '']
 
 
 # UPTO
@@ -1638,5 +1638,70 @@ It kind of worked!
   - [ ] more data
   - [ ] bigger/small model
   - [ ] more reg
-  - [ ] choosing the noise? like truthfull llama
-- [ ] :bug: is my quandrantright? I might be using the wrong label as my test acc doesnt match metric acc
+  - [ ] **choosing the noise? like truthfull llama**
+    - [ ] so take a PCA?
+- [x] :bug: is my quandrantright? I might be using the wrong label as my test acc doesnt match metric acc
+- how does it generalize?
+
+
+# How does honest llama get interventions?
+
+Since I would like to choose an intervention that is good for my probe. While only looking at train. This will have to be during data gathering.
+Sicne I would like to probe.fit(training) to get it. 
+
+Format:
+- https://github.com/likenneth/honest_llama/blob/master/utils.py#L490C5-L490C109
+
+- > interventions: a dictionary of the form {layer_name: [(head, direction, projected_mean, projected_std)]}
+- > intervention_fn: a function that takes in a head output and a layer name and returns the intervened output
+
+And we get the intervention dict here [this](https://github.com/likenneth/honest_llama/blob/master/validation/edit_weight.py) is it
+
+
+```py
+
+# get directions
+if args.use_center_of_mass:
+    # this gets truthfull direction for each activation
+    # `(true_mass_mean - false_mass_mean)` where these are just the mean of activations corresponding to the true and false labels :)
+    com_directions = get_com_directions(num_layers, num_heads, train_set_idxs, val_set_idxs, separated_head_wise_activations, separated_labels)
+else:
+    com_directions = None
+# train a probe on each layer. get the ones with the highest val acc https://github.com/likenneth/honest_llama/blob/master/utils.py#L645
+top_heads, probes = get_top_heads(train_set_idxs, val_set_idxs, separated_head_wise_activations, separated_labels, num_layers, num_heads, args.seed, args.num_heads, args.use_random_dir)
+
+print("Heads intervened: ", sorted(top_heads))
+# https://github.com/likenneth/honest_llama/blob/master/utils.py#L686
+# - for each layer/head
+#   - get a direction (norm)
+#   - std(activation * direction) - to get the standard deviation
+interventions = get_interventions_dict(top_heads, probes, tuning_activations, num_heads, args.use_center_of_mass, args.use_random_dir, com_directions)
+```
+
+The [actual intervention ](https://github.com/likenneth/honest_llama/blob/master/validation/edit_weight.py#L101C1-L101C7) is just to add the `std * direction` to the weights. So it's a linear intervention. 
+
+So in summary, we just get the direction and std between truthlike and lielike activations. And the top heads. Then we add the std * direction to the weights.
+
+I can just add to the activation? Or the weight by using a temporary model.
+
+Doing the embeddings would be much harder.
+
+But then if I make a more truthfull inference, and a lesstruthfull inference. And it's like 70% accurate. Then my model can get 70% of the way by just reverse engienering my perturbation. So really I want the most *revealing* intervention, not one that's aligned with the truth? But maybe that's the same thing? 
+
+Could I just try a few random vectors to get ones that cause a switch between the logits. While still giving a coherent answer. OK now I'm in the realm of counterfactuals. So lets ask this:
+- can I just use backprop on the model (memory limit!) to get a weight update that would leads to the opposite answer? Yes! And it will only take one example!
+
+So ideas:
+- ~~take top heads~~ nah no need
+- use backpropr to get a counterfactual intervention over a few train samples, and hope it scales!
+- or just use the direction * std approach from honestllama
+
+
+Also should read this to see thier PCA approach https://browse.arxiv.org/pdf/2310.01405.pdf
+
+We use the following linear models during evaluation:
+1. Prompt Difference: We find a word and its antonym that are central to the concept and subtract the layer l representation. Here, we use the “Love” and “Hate” tokens for the utility concept.
+2. PCA - We take an unlabelled dataset D that primarily varies in the concept of interest. We take the top PCA direction that explains the maximum variance in the data.
+3. K-Means - We take an unlabelled dataset D and perform K-Means clustering with K = 2, hoping to separate high-concept and low-concept samples. We take the difference between the centroids of the two clusters as the concept direction.
+4. Mean Difference - We take the difference between the means of high-concept and low- concept samples of the data:
+5. Logistic Regression - The weights of logistic regression trained to separate Xhighl and Xlowl on some training data can be used as a concept direction as well.
