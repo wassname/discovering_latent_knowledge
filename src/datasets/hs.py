@@ -31,7 +31,8 @@ from src.datasets.scores import choice2id, choice2ids
 from src.helpers.torch import clear_mem
 from collections import defaultdict
 from dataclasses import field
-from src.datasets.intervene import InterventionDict
+from src.datasets.intervene import InterventionDict, intervention_meta_fn
+from functools import partial
 
 
 def noise_for_embeds(inputs_embeds, seed=42, std = 2e-2):
@@ -78,9 +79,22 @@ class ExtractHiddenStates:
     
     model: PreTrainedModel
     tokenizer: PreTrainedTokenizer
-    intervention_dicts: List[Optional[InterventionDict]]
+    intervention_dicts: Optional[InterventionDict] = None
     layer_stride: int = 8
     layer_padding: int = 3
+    
+    def get_layer_names(self):
+        # for WizardLM/WizardCoder-3B-V1.0
+        # HEADS = [f"transformer.h.{i}.attn.c_proj" for i in range(self.model.config.num_hidden_layers)]
+        # MLPS = [f"transformer.h.{i}.mlp" for i in range(self.model.config.num_hidden_layers)]
+        
+        # for "WizardLM/WizardCoder-Python-13B-V1.0"
+        # HACK: depends on model layout
+        layers_names = [f"model.layers.{i}.self_attn" for i in range(self.model.config.num_hidden_layers)]
+        module_names = [k for k,v in self.model.named_modules()]
+        layers_not_found = set(layers_names)-set(module_names)
+        assert len(layers_not_found)==0, f"some layers not found in model: {layers_not_found}. we have {layers_names}"
+        return self.get_layer_selection(layers_names)
 
 
     def get_batch_of_hidden_states(
@@ -117,26 +131,26 @@ class ExtractHiddenStates:
 
         # forward pass
         last_token = -1
-        # for WizardLM/WizardCoder-3B-V1.0
-        # HEADS = [f"transformer.h.{i}.attn.c_proj" for i in range(self.model.config.num_hidden_layers)]
-        # MLPS = [f"transformer.h.{i}.mlp" for i in range(self.model.config.num_hidden_layers)]
-        
-        # for "WizardLM/WizardCoder-Python-13B-V1.0"
-        # HACK: depends on model layout
-        layers_names = [f"model.layers.{i}.self_attn" for i in range(self.model.config.num_hidden_layers)]
-        # MLPS = [f"model.layers.{i}.mlp" for i in range(self.model.config.num_hidden_layers)]
-        
-        module_names = [k for k,v in self.model.named_modules()]
-        layers_not_found = set(layers_names)-set(module_names)
-        assert len(layers_not_found)==0, f"some layers not found in model: {layers_not_found}. we have {layers_names}"
-        
-        layers_names, layer_inds = self.get_layer_selection(layers_names)
+                
+        layers_names, layer_inds = self.get_layer_names()
         
         self.model.eval()
-        # outs = []
+        
+        
+        if self.intervention_dicts is not None:
+            # extraction mode
+            # 15 is a magic number from honest_llama
+            num_heads = self.model.config.num_attention_heads
+            intervention_fn1 = partial(intervention_meta_fn, interventions=self.intervention_dicts, num_heads=num_heads, alpha=-15)
+            intervention_fn2 = partial(intervention_meta_fn, interventions=self.intervention_dicts, num_heads=num_heads, alpha=15)
+            edit_outputs = [intervention_fn1, intervention_fn2]
+        else:
+            # calibration mode
+            edit_outputs = [None]
+        
         with torch.no_grad():
             multi_outs = defaultdict(list)
-            for edit_output in self.intervention_dicts:
+            for edit_output in edit_outputs:
                 with TraceDict(self.model, layers_names, retain_grad=True, detach=True, edit_output=edit_output) as ret:
                     model_inputs = self.model.prepare_inputs_for_generation(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
                     outputs = self.model.forward(

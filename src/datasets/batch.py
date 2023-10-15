@@ -6,7 +6,7 @@ from datasets.arrow_dataset import Dataset
 import hashlib
 import pickle
 import numpy as np
-from typing import List, Dict, Any, Union, NewType
+from typing import List, Dict, Any, Union, NewType, Optional
 
 from src.datasets.hs import ExtractHiddenStates
 from src.helpers.typing import float_to_int16, int16_to_float
@@ -14,7 +14,7 @@ from src.helpers.ds import ds_keep_cols, clear_mem
 from src.datasets.intervene import InterventionDict
 
 
-def batch_hidden_states(model, tokenizer, intervention_dicts: List[InterventionDict], data: Dataset, batch_size=2, layer_padding=3, layer_stride=4):
+def batch_hidden_states(model, tokenizer, intervention_dicts: Optional[InterventionDict], data: Dataset, batch_size=2, layer_padding=3, layer_stride=4):
     """
     Given an encoder-decoder model, a list of data, computes the contrast hidden states on n random examples.
     Returns numpy arrays of shape (n, hidden_dim) for each candidate label, along with a boolean numpy array of shape (n,)
@@ -47,21 +47,22 @@ def batch_hidden_states(model, tokenizer, intervention_dicts: List[InterventionD
             large_arrays_keys = [k for k,v in hsl.items() if isinstance(v, torch.Tensor) and v.ndim>2]
             
             # TODO deal with multiple lists of hs in hs0
-            large_arrays_as_int16 = {k:hsl[k][j] for k in large_arrays_keys}
+            large_arrays = {k:hsl[k][j] for k in large_arrays_keys}
             
             yield dict(
                 
                 # large_arrays_keys=large_arrays_keys,
-                scores0=hsl["scores"][j],            
+                scores0=hsl["scores"][j], 
+                # layer_names=hsl["layers"][j] if k==0 else [], # just in the first one, to save space
                 
                 ds_index=index[j],
                 
                 # int16 makes our storage much smaller
-                **large_arrays_as_int16,
+                **large_arrays,
                 
                 **info
             )
             
-        info = large_arrays_as_int16= hsl = None
+        info = large_arrays = hsl = None
         clear_mem()
 

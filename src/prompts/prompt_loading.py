@@ -175,9 +175,21 @@ def load_prompts(
             prompt_format=prompt_format,
         )
         prompts = [{'ds_string': ds_string, 'example_i':i, **p} for p in prompts]
+        
+        def prompt_ok(prompt):
+            """ we want answers where we can distinguish them from the first token
+            we don't have access to the tokenizer here, so we just make sure the first 3 letters are differen't and there are not spaces
+            """
+            answer_choices = prompt['answer_choices']
+            a = answer_choices[0][:3]
+            b = answer_choices[1][:3]
+            return (a != b) and ' ' not in a
+
+        prompts = list(filter(prompt_ok, prompts))
         prompts = prompt_sampler(prompts, seed=42+j)
+        # TODO: make sure they are single token answers (or at least the first token is unique)
         for p in prompts:
-            j +=1
+            j += 1
             yield p
 
 

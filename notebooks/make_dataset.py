@@ -14,7 +14,7 @@ logger.add("make_dataset_{time}.log")
 import pandas as pd
 import numpy as np
 
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict, Union, Set
 
 import torch
 import torch.nn as nn
@@ -28,28 +28,30 @@ from pathlib import Path
 import transformers
 from transformers import GPTQConfig
 from datasets import Dataset, DatasetInfo
-from src.datasets.load import load_ds
-from src.models.load import verbose_change_param, AutoConfig, AutoTokenizer, AutoModelForCausalLM, PreTrainedTokenizerBase
 from tqdm.auto import tqdm
 import os, re, sys, collections, functools, itertools, json
+from simple_parsing import ArgumentParser
+import random
+from einops import rearrange, reduce, repeat, asnumpy, parse_shape
+from functools import partial
 
+from src.datasets.load import load_ds
+from src.models.load import verbose_change_param, AutoConfig, AutoTokenizer, AutoModelForCausalLM, PreTrainedTokenizerBase
 from src.models.load import load_model
 from src.datasets.load import ds2df
 from src.datasets.load import rows_item
 from src.datasets.batch import batch_hidden_states
 # from src.datasets.scores import choice2ids, scores2choice_probs
 
-
+from src.datasets.hs import ExtractHiddenStates
 from itertools import chain
 import functools
 from src.prompts.prompt_loading import load_prompts
 from src.datasets.scores import scores2choice_probs
 from src.datasets.scores import choice2id, choice2ids
-
-from simple_parsing import ArgumentParser
+from src.datasets.intervene import intervention_meta_fn, get_interventions_dict, InterventionDict
 from src.extraction.config import ExtractConfig
-import random
-
+from src.config import root_folder
 
 def qc_ds(f):
     ds4 = load_ds(f)
@@ -221,8 +223,9 @@ def qc_ds(f):
     
     
     
-def load_preproc_dataset(ds_name: str, cfg: ExtractConfig, tokenizer: PreTrainedTokenizerBase, split_type:str="train") -> Dataset:
-    N = cfg.max_examples[split_type!="train"]
+def load_preproc_dataset(ds_name: str, cfg: ExtractConfig, tokenizer: PreTrainedTokenizerBase, split_type:str="train", N=None) -> Dataset:
+    if N is None:
+        N = cfg.max_examples[split_type!="train"]
     ds_prompts = Dataset.from_generator(
         load_prompts,
         gen_kwargs=dict(
@@ -272,6 +275,111 @@ def load_preproc_dataset(ds_name: str, cfg: ExtractConfig, tokenizer: PreTrained
 def row_choice_ids(r, tokenizer):
     return choice2ids([[c] for c in r['answer_choices']], tokenizer)
 
+
+def expand_choices(choices: List[str]) -> Set[str]:
+    """expand out choices by adding versions that are upper, lower, whitespace, etc"""
+    new = []
+    for c in choices:
+        new.append(c)
+        new.append(c.upper())
+        new.append(c.capitalize())
+        new.append(c.lower())
+    return set(new)
+
+
+
+def post_proc_hs_ds(ds1, tokenizer):  
+    """add labels for our probe.
+    
+    Given next_token scores (logits) we take only the subset the corresponds to our negative tokens (e.g. False, no, ...) and positive tokens (e.g. Yes, yes, affirmative, ...)."""        
+    
+    # left_choices = list(r[0] for r in ds1['answer_choices'])+['no', 'false', 'negative', 'wrong']
+    # right_choices = list(r[1] for r in ds1['answer_choices'])+['yes', 'true', 'positive', 'right']
+    # left_choices, right_choices = expand_choices(left_choices), expand_choices(right_choices)
+    # assert len(set(left_choices).intersection(right_choices))==0
+    # expanded_choices = [left_choices, right_choices]
+    # expanded_choice_ids = choice2ids(expanded_choices, tokenizer)
+    # add_ans_exp = lambda r: scores2choice_probs(r, expanded_choice_ids, prefix="expanded_", keys=["scores0"])
+    # FIXME: we have the yes and no swapped
+    # FIXME: use k-mean closest tokens?
+    
+
+    # this is just based on pairs for that answer...
+    # FIXME of course I added a dim!
+    add_txt_ans0 = lambda r: {'txt_ans0': tokenizer.batch_decode(torch.softmax(torch.tensor(r['scores0']), 0).argmax(0))}
+
+    # Either just use the template choices
+    add_ans = lambda r: scores2choice_probs(r, row_choice_ids(r, tokenizer), keys=["scores0"])
+
+    # Or all expanded choices
+    ds1.set_format(type='numpy')#, columns=['input_ids', 'token_type_ids', 'attention_mask', 'label'])
+    ds3 = (
+        ds1
+        .map(add_ans, desc='add_ans') # slow?
+        # .map(add_ans_exp)
+        .map(add_txt_ans0, desc='add_txt_ans0')
+    )
+    return ds3
+
+def create_hs_ds(ds_name, ds_tokens, model, cfg, intervention_dicts = [None, ], f = None, split_type="train"):
+    info_kwargs = dict(extract_cfg=cfg.to_dict(), ds_name=ds_name, split_type=split_type, f=f, date=pd.Timestamp.now().isoformat(),)
+    
+    # first we make the calibration dataset with no intervention
+    gen_kwargs = dict(
+        model=model,
+        tokenizer=tokenizer,
+        data=ds_tokens,
+        batch_size=BATCH_SIZE,
+        layer_padding=cfg.layer_padding,
+        layer_stride=cfg.layer_stride,
+        intervention_dicts=intervention_dicts,
+    )
+    if os.environ.get('TEST', False):
+        # it's easier to debug if we don't use multiprocessing
+        gen = batch_hidden_states(**gen_kwargs)
+        b =next(iter(gen))
+    
+    ds1 = Dataset.from_generator(
+        generator=batch_hidden_states,
+        info=DatasetInfo(
+            description=json.dumps(info_kwargs, indent=2),
+            config_name=f,
+        ),
+        gen_kwargs=gen_kwargs,
+        num_proc=1,
+    )
+    return ds1
+
+def create_intervention(ds_name, ds_tokens, model, layer_names, N=10):
+    
+    ds_tokens_calib = ds_tokens.select(range(N-1))
+    # TODO: do we need ds_name if we have the ds?
+    ds_calibration = create_hs_ds(ds_name+'_calib', ds_tokens_calib, model, cfg, intervention_dicts = None, f=f)
+    
+    activations = np.array(ds_calibration['head_activation']).squeeze(-1)
+    labels = np.array(ds_calibration["label_true"]).astype(int)==1
+    num_heads = model.config.num_attention_heads
+    
+    interventions = get_interventions_dict(activations, labels, layer_names, num_heads)
+    return interventions
+    
+def load_intervention(ds_name, cfg, model, tokenizer, model_name):
+    num_heads = model.config.num_attention_heads
+    intervention_f = root_folder / 'data' / 'interventions' / f'{model_name}.pkl'
+    if not intervention_f.exists():
+        layer_names, layer_inds = ExtractHiddenStates(model, tokenizer, layer_stride=cfg.layer_stride, layer_padding=cfg.layer_padding).get_layer_names()
+        ds_tokens = load_preproc_dataset(ds_name, cfg, tokenizer, N=10)
+        interventions = create_intervention(ds_name, ds_tokens, model, layer_names)
+        torch.save(interventions, intervention_f)
+    else:
+        logger.info(f'loading interventions from {intervention_f}')
+    
+    interventions = torch.load(intervention_f)
+        
+    intervention_fn = partial(intervention_meta_fn, interventions=interventions, num_heads=num_heads)
+    return interventions, intervention_fn
+
+
 if __name__ == "__main__":
     parser = ArgumentParser(add_help=False)
     parser.add_arguments(ExtractConfig, dest="run")
@@ -301,22 +409,16 @@ if __name__ == "__main__":
     BATCH_SIZE = 4  # None # None means auto # 6 gives 16Gb/25GB. where 10GB is the base model. so 6 is 6/15
 
 
-        
-    # TODO: loop through all prompts in this dataset
     ds_names = cfg.datasets
     split_type = "train"
 
     model, tokenizer = load_model(cfg.model)
 
+    
 
-    # def create_intervention(ds_name, model):
-    #     # UPTO: FIXME:
-    #     intervention_f = root / 'data' / 'interventions' / f'{model_name}.pkl'
-    #     if not intervention_f.exist():
-    #     intervention = calibrate(model, dataset.shuffle(42).head(10))
-    #     # load intervention
-    #     # get com direction https://github.com/likenneth/honest_llama/blob/master/utils.py#L731
-    #     intervention = torch.load(intervention_f)
+    ds_name = 'imdb'
+    model_name = cfg.model
+    intervention, intervention_fn = load_intervention(ds_name, cfg, model, tokenizer, model_name)
 
     for ds_name in ds_names:
         
@@ -328,73 +430,10 @@ if __name__ == "__main__":
         sanitize = lambda s:s.replace('/', '').replace('-', '_') if s is not None else s
         dataset_name = f"{sanitize(cfg.model)}_{ds_name}_{split_type}_{N}"
         f = f"../.ds/{dataset_name}"
-
-        gen_kwargs = dict(
-            model=model,
-            tokenizer=tokenizer,
-            data=ds_tokens,
-            batch_size=BATCH_SIZE,
-            layer_padding=cfg.layer_padding,
-            layer_stride=cfg.layer_stride,
-        )
-
-        info_kwargs = dict(extract_cfg=cfg.to_dict(), ds_name=ds_name, split_type=split_type, f=f, date=pd.Timestamp.now().isoformat(),)
         
-        if os.environ.get('TEST', False):
-            gen = batch_hidden_states(**gen_kwargs)
-            b =next(iter(gen))
+        ds1 = create_hs_ds(ds_name, ds_tokens, model, cfg, intervention_dicts=intervention, f=f)
 
-        # [DatasetInfo](https://github.com/huggingface/datasets/blob/9b21e181b642bd55b3ef68c1948bfbcd388136d6/src/datasets/info.py#L94)
-        ds1 = Dataset.from_generator(
-            generator=batch_hidden_states,
-            info=DatasetInfo(
-                description=json.dumps(info_kwargs, indent=2),
-                config_name=f,
-            ),
-            gen_kwargs=gen_kwargs,
-            num_proc=1,
-        )
-
-        # ## Add labels
-        # For our probe. Given next_token scores (logits) we take only the subset the corresponds to our negative tokens (e.g. False, no, ...) and positive tokens (e.g. Yes, yes, affirmative, ...).
-        def expand_choices(choices: List[str]) -> List[str]:
-            """expand out choices by adding versions that are upper, lower, whitespace, etc"""
-            new = []
-            for c in choices:
-                new.append(c)
-                new.append(c.upper())
-                new.append(c.capitalize())
-                new.append(c.lower())
-            return set(new)
-
-
-        # left_choices = list(r[0] for r in ds1['answer_choices'])+['no', 'false', 'negative', 'wrong']
-        # right_choices = list(r[1] for r in ds1['answer_choices'])+['yes', 'true', 'positive', 'right']
-        # left_choices, right_choices = expand_choices(left_choices), expand_choices(right_choices)
-        # assert len(set(left_choices).intersection(right_choices))==0
-        # expanded_choices = [left_choices, right_choices]
-        # expanded_choice_ids = choice2ids(expanded_choices, tokenizer)
-        # add_ans_exp = lambda r: scores2choice_probs(r, expanded_choice_ids, prefix="expanded_", keys=["scores0"])
-        # FIXME: we have the yes and no swapped
-        # FIXME: use k-mean closest tokens?
-        
-
-        # this is just based on pairs for that answer...
-        # FIXME of course I added a dim!
-        add_txt_ans0 = lambda r: {'txt_ans0': tokenizer.batch_decode(torch.softmax(torch.tensor(r['scores0']), 0).argmax(0))}
-
-        # Either just use the template choices
-        add_ans = lambda r: scores2choice_probs(r, row_choice_ids(r, tokenizer), keys=["scores0"])
-
-        # Or all expanded choices
-        ds1.set_format(type='numpy')#, columns=['input_ids', 'token_type_ids', 'attention_mask', 'label'])
-        ds3 = (
-            ds1
-            .map(add_ans, desc='add_ans') # slow?
-            # .map(add_ans_exp)
-            .map(add_txt_ans0, desc='add_txt_ans0')
-        )
-
+        ds3 = post_proc_hs_ds(ds1, tokenizer)
         ds3.save_to_disk(f)
         print('! saved f=', f)
         
