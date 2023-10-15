@@ -9,7 +9,7 @@ from datasets import disable_caching
 disable_caching()
 
 from loguru import logger
-logger.add("make_dataset_{time}.log")
+logger.add("logs/make_dataset_{time}.log")
 
 import pandas as pd
 import numpy as np
@@ -199,6 +199,7 @@ def qc_ds(f):
         X_test = X_test[:max_rows]
         y_test = y_test[:max_rows]
         print('split size', X_train.shape, y_test.shape)
+        print(f'balance of classes: {y_train.mean():2.2%} {y_test.mean():2.2%}')
 
         # scale
         scaler = RobustScaler()
