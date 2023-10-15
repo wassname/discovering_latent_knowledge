@@ -5,10 +5,11 @@ When editing or updating this file check out these resources:
 - [LLM-As-Chatbot](https://github.com/deep-diver/LLM-As-Chatbot/blob/main/models/falcon.py)
 - [oobabooga](https://github.com/oobabooga/text-generation-webui/blob/main/modules/models.py#L134)
 """
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelForMaskedLM, AutoModelForCausalLM, AutoConfig
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelForMaskedLM, AutoModelForCausalLM, AutoConfig, PreTrainedTokenizerBase, PreTrainedTokenizer
 import torch
 from src.datasets.dropout import check_for_dropout
 from loguru import logger
+from typing import Tuple
 
 def verbose_change_param(tokenizer, path, after):
     before = getattr(tokenizer, path)
@@ -18,7 +19,7 @@ def verbose_change_param(tokenizer, path, after):
     return tokenizer
 
 
-def load_model(model_repo = "TheBloke/WizardCoder-Python-13B-V1.0-GPTQ"):
+def load_model(model_repo = "TheBloke/WizardCoder-Python-13B-V1.0-GPTQ") -> Tuple[AutoModelForCausalLM, PreTrainedTokenizerBase]:
     """
     Chosing:
     - https://old.reddit.com/r/LocalLLaMA/wiki/models

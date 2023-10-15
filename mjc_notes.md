@@ -1709,3 +1709,70 @@ We use the following linear models during evaluation:
 # 2023-10-12 13:07:28
 
 So I want to try not applying a random but by fitting to a few samples. Probobly mean difference is the easiest. Of course this would be on weights not embeddings.
+
+
+So we need some kind of fitting part. And we need to be able to reuse it for each model!
+
+Psudocode
+
+```py
+intervention_f = root/'data'/'interventions'/f'{model_name}.pkl'
+if not intervention_f.exist():
+  intervention = calibrate(model, dataset.shuffle(42).head(10))
+# load intervention
+intervention = torch.load(intervention_f)
+
+# get dataset
+```
+
+
+- So first I need to gather data, using hs
+- so I can get com directions https://github.com/likenneth/honest_llama/blob/master/utils.py#L731
+- then I need to save it
+- then I need to intervene using it 
+
+
+how to intervene?
+- `intervention_fn`   
+    - >  If edit_output is provided, it should be a function that takes two arguments: output, and the layer name; and then it returns the modified output.
+    - [src](https://github.com/davidbau/baukit/blob/main/baukit/nethook.py#L42C1-L45C56)
+- `interventions` = Dict[str:layer_name, [head, direction, magnitude]]
+    - interventions[f"model.layers.{layer}.self_attn.head_out"].append((head, direction, std))`
+    - this is how much to modify outputs for a layer
+- `with TraceDict(model, layers_to_intervene, edit_output=intervention_fn) as ret:`
+- intervention_fn https://github.com/likenneth/honest_llama/blob/e010f82bfbeaa4326cef8493b0dd5b8b14c6da67/validation/validate_2fold.py#L114
+
+```py
+def get_interventions_dict(probes, tuning_activations, num_heads, use_center_of_mass, use_random_dir, com_directions): 
+
+    interventions = {}
+    for layer, head in top_heads: 
+        interventions[f"model.layers.{layer}.self_attn.head_out"] = []
+    for layer, head in top_heads:
+        direction = com_directions[layer_head_to_flattened_idx(layer, head, num_heads)]
+        direction = direction / np.linalg.norm(direction)
+        activations = tuning_activations[:,layer,head,:] # batch x 128
+        proj_vals = activations @ direction.T
+        proj_val_std = np.std(proj_vals)
+        interventions[f"model.layers.{layer}.self_attn.head_out"].append((head, direction.squeeze(), proj_val_std))
+    # sort
+    for layer, head in top_heads: 
+        interventions[f"model.layers.{layer}.self_attn.head_out"] = sorted(interventions[f"model.layers.{layer}.self_attn.head_out"], key = lambda x: x[0])
+
+    return interventions
+```
+
+
+How does the intervention work?
+- llama2blocks: In llama2 blocks att and mlp are both added to residual
+- ```py
+  h = x + self.attention.forward(
+      self.attention_norm(x), start_pos, freqs_cis, mask
+  )
+  out = h + self.feed_forward.forward(self.ffn_norm(h))
+  # https://github.com/facebookresearch/llama/blob/main/llama/model.py#L351
+  ```
+- how does intervention dict work
+  - https://github.com/davidbau/baukit/blob/main/baukit/nethook.py
+  - `out = edit_out(out, layer_name)`
+  - but **honest_llama seperates it's states by head**. But are the intervening on the hiddenstate after output... no they are intervening on the layers... so head. Yeah it makes sense now!

@@ -6,13 +6,15 @@ from datasets.arrow_dataset import Dataset
 import hashlib
 import pickle
 import numpy as np
+from typing import List, Dict, Any, Union, NewType
 
 from src.datasets.hs import ExtractHiddenStates
 from src.helpers.typing import float_to_int16, int16_to_float
 from src.helpers.ds import ds_keep_cols, clear_mem
+from src.datasets.intervene import InterventionDict
 
 
-def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, layer_padding=3, layer_stride=4):
+def batch_hidden_states(model, tokenizer, intervention_dicts: List[InterventionDict], data: Dataset, batch_size=2, layer_padding=3, layer_stride=4):
     """
     Given an encoder-decoder model, a list of data, computes the contrast hidden states on n random examples.
     Returns numpy arrays of shape (n, hidden_dim) for each candidate label, along with a boolean numpy array of shape (n,)
@@ -20,7 +22,7 @@ def batch_hidden_states(model, tokenizer, data: Dataset, batch_size=2, layer_pad
     
     This is deliberately simple so that it's easy to understand, rather than being optimized for efficiency
     """
-    ehs = ExtractHiddenStates(model, tokenizer, layer_stride=layer_stride, layer_padding=layer_padding)
+    ehs = ExtractHiddenStates(model, tokenizer, intervention_dicts=intervention_dicts, layer_stride=layer_stride, layer_padding=layer_padding)
     
     torch_cols = ['input_ids', 'attention_mask', 'choice_ids']
     ds_t_subset = ds_keep_cols(data, torch_cols)

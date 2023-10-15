@@ -11,7 +11,7 @@ from transformers import (
     PreTrainedTokenizer,
     PreTrainedModel
 )
-from typing import Optional, List, Tuple, Dict
+from typing import Optional, List, Tuple, Dict, NewType
 from transformers import LogitsProcessorList
 import functools
 from src.helpers.torch import to_numpy
@@ -30,7 +30,8 @@ from einops import rearrange, reduce, repeat
 from src.datasets.scores import choice2id, choice2ids
 from src.helpers.torch import clear_mem
 from collections import defaultdict
-
+from dataclasses import field
+from src.datasets.intervene import InterventionDict
 
 
 def noise_for_embeds(inputs_embeds, seed=42, std = 2e-2):
@@ -70,11 +71,14 @@ def stack_trace_returns(ret: TraceDict, names: List[str]) -> torch.Tensor:
 #     assert len(grads), f"non of pattern='{pattern}' found in {weight_grads.keys()}"
 #     return rearrange(grads, "lyrs b hs -> b lyrs hs")
         
+
+
 @dataclass
 class ExtractHiddenStates:
     
     model: PreTrainedModel
     tokenizer: PreTrainedTokenizer
+    intervention_dicts: List[Optional[InterventionDict]]
     layer_stride: int = 8
     layer_padding: int = 3
 
@@ -119,28 +123,22 @@ class ExtractHiddenStates:
         
         # for "WizardLM/WizardCoder-Python-13B-V1.0"
         # HACK: depends on model layout
-        HEADS = [f"model.layers.{i}.self_attn" for i in range(self.model.config.num_hidden_layers)]
-        MLPS = [f"model.layers.{i}.mlp" for i in range(self.model.config.num_hidden_layers)]
+        layers_names = [f"model.layers.{i}.self_attn" for i in range(self.model.config.num_hidden_layers)]
+        # MLPS = [f"model.layers.{i}.mlp" for i in range(self.model.config.num_hidden_layers)]
         
-        layers_names = HEADS+MLPS
         module_names = [k for k,v in self.model.named_modules()]
         layers_not_found = set(layers_names)-set(module_names)
         assert len(layers_not_found)==0, f"some layers not found in model: {layers_not_found}. we have {layers_names}"
         
+        layers_names, layer_inds = self.get_layer_selection(layers_names)
+        
         self.model.eval()
+        # outs = []
         with torch.no_grad():
-            outs = []
-            with TraceDict(self.model, HEADS+MLPS, retain_grad=True, detach=True) as ret:
-                # Forward for one step is the same as greedy generation for one step
-                # https://github.com/huggingface/transformers/blob/234cfefbb083d2614a55f6093b0badfb2efc3b45/src/transformers/generation_utils.py#L1528
-                # HACK: depends on model layout
-                inputs_embeds = self.model.model.embed_tokens(input_ids)
-                    
-                noise = noise_for_embeds(inputs_embeds, seed=42)
-                multi_outs = defaultdict(list)
-                for direction in range(-1, 2):
-                    inputs_embeds_w_noise = inputs_embeds + noise * direction
-                    model_inputs = self.model.prepare_inputs_for_generation(input_ids=None, inputs_embeds=inputs_embeds_w_noise, attention_mask=attention_mask, use_cache=False)
+            multi_outs = defaultdict(list)
+            for edit_output in self.intervention_dicts:
+                with TraceDict(self.model, layers_names, retain_grad=True, detach=True, edit_output=edit_output) as ret:
+                    model_inputs = self.model.prepare_inputs_for_generation(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
                     outputs = self.model.forward(
                         **model_inputs,
                         return_dict=True,
@@ -152,27 +150,22 @@ class ExtractHiddenStates:
                     hidden_states = list(outputs.hidden_states)
                     hidden_states = rearrange(hidden_states, 'lyrs b seq hs -> b lyrs seq hs')[:, :, last_token]
                     ## from ret, we get the layer activation and the grads on them
-                    head_activation = tcopy(stack_trace_returns(ret, HEADS))
-                    mlp_activation = tcopy(stack_trace_returns(ret, MLPS))
-                    residual_stream = head_activation + mlp_activation
-                    
-                    # select only some layers
-                    layer_inds = self.get_layer_selection(outputs)
-                    residual_stream = residual_stream[:, layer_inds]
-                    hidden_states = hidden_states[:, layer_inds]    
+                    head_activation = tcopy(stack_trace_returns(ret, layers_names))
+                    # mlp_activation = tcopy(stack_trace_returns(ret, MLPS))
 
                     # collect outputs
                     multi_outs['scores'].append(outputs["scores"])
-                    multi_outs['hidden_states'].append(hidden_states)
-                    multi_outs['residual_stream'].append(residual_stream)
-            
+                    # multi_outs['hidden_states'].append(hidden_states)
+                    multi_outs['head_activation'].append(head_activation)
+                    # multi_outs['mlp_activation'].append(mlp_activation)
+                
             # stack
             multi_outs['scores'] = torch.stack(multi_outs['scores'], -1)
-            multi_outs['hidden_states'] = torch.stack(multi_outs['hidden_states'], -1)
-            multi_outs['residual_stream'] = torch.stack(multi_outs['residual_stream'], -1)
+            # multi_outs['mlp_activation'] = torch.stack(multi_outs['mlp_activation'], -1)
+            multi_outs['head_activation'] = torch.stack(multi_outs['head_activation'], -1)
             
             # combine
-            out_common = dict(input_ids=input_ids, attention_mask=attention_mask, layers=layer_inds,)
+            out_common = dict(input_ids=input_ids, attention_mask=attention_mask, layers=layers_names,)
             if debug:            
                 out_common['input_truncated'] = self.tokenizer.batch_decode(input_ids)
                 out_common['text_ans'] = self.tokenizer.batch_decode(outputs["scores"].softmax(-1).argmax(-1))
@@ -190,7 +183,7 @@ class ExtractHiddenStates:
     
     
 
-    def get_layer_selection(self, outputs):
+    def get_layer_selection(self, layer_names):
         """Sometimes we don't want to save all layers.
         
         We skip the first few (data leakage?). Stride the the middle (could be valuable), and include the last few (possibly high level concepts).
@@ -198,7 +191,7 @@ class ExtractHiddenStates:
         See also https://www.lesswrong.com/posts/bWxNPMy5MhPnQTzKz/what-discovering-latent-knowledge-did-and-did-not-find-4
         """
         # for self.layer_padding, skip the first few
-        num_layers = len(outputs["hidden_states"])-1
+        num_layers = len(layer_names)-1
         strided_layers = torch.arange(
             self.layer_padding,
             num_layers-self.layer_padding,
@@ -206,9 +199,8 @@ class ExtractHiddenStates:
         ).tolist()
         # for self.layer_padding ALWAYS include the last few. Why, this is based on the intuition that the last layers may be the most valuable
         last_few = torch.arange(num_layers-self.layer_padding, num_layers).tolist()
-        layers = sorted(set(list(strided_layers)+list(last_few)))
-        # TODO: check for dups
-        return layers
+        layers_inds = sorted(set(list(strided_layers)+list(last_few)))
+        return [layer_names[i] for i in layers_inds], layers_inds
 
 def detachcpu(x):
     """

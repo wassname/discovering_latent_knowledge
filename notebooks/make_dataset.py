@@ -29,7 +29,7 @@ import transformers
 from transformers import GPTQConfig
 from datasets import Dataset, DatasetInfo
 from src.datasets.load import load_ds
-from src.models.load import verbose_change_param, AutoConfig, AutoTokenizer, AutoModelForCausalLM
+from src.models.load import verbose_change_param, AutoConfig, AutoTokenizer, AutoModelForCausalLM, PreTrainedTokenizerBase
 from tqdm.auto import tqdm
 import os, re, sys, collections, functools, itertools, json
 
@@ -48,33 +48,7 @@ from src.datasets.scores import choice2id, choice2ids
 
 from simple_parsing import ArgumentParser
 from src.extraction.config import ExtractConfig
-parser = ArgumentParser(add_help=False)
-parser.add_arguments(ExtractConfig, dest="run")
-
-# argv="""\
-# "WizardLM/WizardCoder-Python-13B-V1.0" \
-# imdb amazon_polarity super_glue:boolq glue:qnli \
-# --max_examples 260 260 \
-# --max_length=600 \
-# --num_shots=1 \
-# """.strip().replace('\n','').split()
-# print(argv)
-
-# argv="""\
-# "HuggingFaceH4/starchat-beta" \
-# imdb amazon_polarity super_glue:boolq glue:qnli \
-# --max_examples 260 260 \
-# --max_length=600 \
-# --num_shots=1 \
-# """.strip().replace('\n','').split()
-# print(argv)
-
-args = parser.parse_args()
-cfg = args.run
-print(cfg)
-
-BATCH_SIZE = 4  # None # None means auto # 6 gives 16Gb/25GB. where 10GB is the base model. so 6 is 6/15
-
+import random
 
 
 def qc_ds(f):
@@ -201,7 +175,6 @@ def qc_ds(f):
     ds5 = ds4.select(known_rows_i)
     df = ds2df(ds5)
 
-
     large_arrays_keys = [k for k,v in ds4[0].items() if v.ndim>1]
 
     for k in large_arrays_keys:
@@ -245,43 +218,23 @@ def qc_ds(f):
     assert len(df_subset_successull_lies)>0, "there should be successful lies in the dataset"
 
     print(f)
-
-
-
-     
-# TODO: loop through all prompts in this dataset
-ds_names = cfg.datasets
-split_type = "train"
-
-model, tokenizer = load_model(cfg.model)
-
-def row_choice_ids(r):
-    return choice2ids([[c] for c in r['answer_choices']], tokenizer)
-
-
-for ds_name in ds_names:
-        
-    # TODO: for when we need custom templates....
-    # ds_root_name, _, subset_name = ds_name.partition(":")
-    # template_path = cfg.template_path/ds_root_name
-    # if subset_name:
-    #     template_path = template_path/subset_name
-    # template_path
-
-    # NOTE: you may need to `rm ~/.cache/huggingface/datasets/generator`
+    
+    
+    
+def load_preproc_dataset(ds_name: str, cfg: ExtractConfig, tokenizer: PreTrainedTokenizerBase, split_type:str="train") -> Dataset:
     N = cfg.max_examples[split_type!="train"]
     ds_prompts = Dataset.from_generator(
-        load_prompts, 
+        load_prompts,
         gen_kwargs=dict(
-            ds_string=ds_name, 
+            ds_string=ds_name,
             num_shots=cfg.num_shots,
             split_type=split_type,
             # template_path=template_path,
             seed=cfg.seed,
             prompt_format='llama',
             N=N*3,
-        ), 
-        )
+        ),
+    )
 
     # ## Format prompts
     # The prompt is the thing we most often have to change and debug. So we do it explicitly here.
@@ -306,92 +259,148 @@ for ds_name in ds_names:
             batched=True,
             desc='prompt_truncated',
         )
-        .map(lambda r: {'choice_ids': row_choice_ids(r)}, desc='choice_ids')
+        .map(lambda r: {'choice_ids': row_choice_ids(r, tokenizer)}, desc='choice_ids')
     )
-    
     
     ds_tokens = ds_tokens.filter(lambda r: r['truncated']==False)
-    ds_tokens = ds_tokens.select(range(min(len(ds_tokens), N)))
+    inds = list(range(min(len(ds_tokens), N)))
+    random.shuffle(inds)
+    ds_tokens = ds_tokens.select(inds)    
     print('removed truncated rows to leave: num_rows', ds_tokens.num_rows)
+    return ds_tokens
 
-    # ## Save as Huggingface Dataset
-    # get dataset filename
-    sanitize = lambda s:s.replace('/', '').replace('-', '_') if s is not None else s
-    dataset_name = f"{sanitize(cfg.model)}_{ds_name}_{split_type}_{N}"
-    f = f"../.ds/{dataset_name}"
+def row_choice_ids(r, tokenizer):
+    return choice2ids([[c] for c in r['answer_choices']], tokenizer)
 
-    gen_kwargs = dict(
-        model=model,
-        tokenizer=tokenizer,
-        data=ds_tokens,
-        batch_size=BATCH_SIZE,
-        layer_padding=cfg.layer_padding,
-        layer_stride=cfg.layer_stride,
-    )
+if __name__ == "__main__":
+    parser = ArgumentParser(add_help=False)
+    parser.add_arguments(ExtractConfig, dest="run")
 
-    info_kwargs = dict(extract_cfg=cfg.to_dict(), ds_name=ds_name, split_type=split_type, f=f, date=pd.Timestamp.now().isoformat(),)
-    
-    if os.environ.get('TEST', False):
-        gen = batch_hidden_states(**gen_kwargs)
-        b =next(iter(gen))
+    # argv="""\
+    # "WizardLM/WizardCoder-Python-13B-V1.0" \
+    # imdb amazon_polarity super_glue:boolq glue:qnli \
+    # --max_examples 260 260 \
+    # --max_length=600 \
+    # --num_shots=1 \
+    # """.strip().replace('\n','').split()
+    # print(argv)
 
-    # [DatasetInfo](https://github.com/huggingface/datasets/blob/9b21e181b642bd55b3ef68c1948bfbcd388136d6/src/datasets/info.py#L94)
-    ds1 = Dataset.from_generator(
-        generator=batch_hidden_states,
-        info=DatasetInfo(
-            description=json.dumps(info_kwargs, indent=2),
-            config_name=f,
-        ),
-        gen_kwargs=gen_kwargs,
-        num_proc=1,
-    )
+    # argv="""\
+    # "HuggingFaceH4/starchat-beta" \
+    # imdb amazon_polarity super_glue:boolq glue:qnli \
+    # --max_examples 260 260 \
+    # --max_length=600 \
+    # --num_shots=1 \
+    # """.strip().replace('\n','').split()
+    # print(argv)
 
-    # ## Add labels
-    # For our probe. Given next_token scores (logits) we take only the subset the corresponds to our negative tokens (e.g. False, no, ...) and positive tokens (e.g. Yes, yes, affirmative, ...).
-    def expand_choices(choices: List[str]) -> List[str]:
-        """expand out choices by adding versions that are upper, lower, whitespace, etc"""
-        new = []
-        for c in choices:
-            new.append(c)
-            new.append(c.upper())
-            new.append(c.capitalize())
-            new.append(c.lower())
-        return set(new)
+    args = parser.parse_args()
+    cfg = args.run
+    print(cfg)
+
+    BATCH_SIZE = 4  # None # None means auto # 6 gives 16Gb/25GB. where 10GB is the base model. so 6 is 6/15
 
 
-    # left_choices = list(r[0] for r in ds1['answer_choices'])+['no', 'false', 'negative', 'wrong']
-    # right_choices = list(r[1] for r in ds1['answer_choices'])+['yes', 'true', 'positive', 'right']
-    # left_choices, right_choices = expand_choices(left_choices), expand_choices(right_choices)
-    # assert len(set(left_choices).intersection(right_choices))==0
-    # expanded_choices = [left_choices, right_choices]
-    # expanded_choice_ids = choice2ids(expanded_choices, tokenizer)
-    # add_ans_exp = lambda r: scores2choice_probs(r, expanded_choice_ids, prefix="expanded_", keys=["scores0"])
-    # FIXME: we have the yes and no swapped
-    # FIXME: use k-mean closest tokens?
-    
+        
+    # TODO: loop through all prompts in this dataset
+    ds_names = cfg.datasets
+    split_type = "train"
 
-    # this is just based on pairs for that answer...
-    # FIXME of course I added a dim!
-    add_txt_ans0 = lambda r: {'txt_ans0': tokenizer.batch_decode(torch.softmax(torch.tensor(r['scores0']), 0).argmax(0))}
+    model, tokenizer = load_model(cfg.model)
 
-    # Either just use the template choices
-    add_ans = lambda r: scores2choice_probs(r, row_choice_ids(r), keys=["scores0"])
 
-    # Or all expanded choices
-    ds1.set_format(type='numpy')#, columns=['input_ids', 'token_type_ids', 'attention_mask', 'label'])
-    ds3 = (
-        ds1
-        .map(add_ans, desc='add_ans') # slow?
-        # .map(add_ans_exp)
-        .map(add_txt_ans0, desc='add_txt_ans0')
-    )
+    # def create_intervention(ds_name, model):
+    #     # UPTO: FIXME:
+    #     intervention_f = root / 'data' / 'interventions' / f'{model_name}.pkl'
+    #     if not intervention_f.exist():
+    #     intervention = calibrate(model, dataset.shuffle(42).head(10))
+    #     # load intervention
+    #     # get com direction https://github.com/likenneth/honest_llama/blob/master/utils.py#L731
+    #     intervention = torch.load(intervention_f)
 
-    ds3.save_to_disk(f)
-    print('! saved f=', f)
-    
-    try:
-        qc_ds(f)
-    except Exception as e:
-        logger.exception('QC failed')
-        # raise e
+    for ds_name in ds_names:
+        
+        ds_tokens = load_preproc_dataset(ds_name, cfg, tokenizer)
+
+        # ## Save as Huggingface Dataset
+        # get dataset filename
+        N = len(ds_tokens)
+        sanitize = lambda s:s.replace('/', '').replace('-', '_') if s is not None else s
+        dataset_name = f"{sanitize(cfg.model)}_{ds_name}_{split_type}_{N}"
+        f = f"../.ds/{dataset_name}"
+
+        gen_kwargs = dict(
+            model=model,
+            tokenizer=tokenizer,
+            data=ds_tokens,
+            batch_size=BATCH_SIZE,
+            layer_padding=cfg.layer_padding,
+            layer_stride=cfg.layer_stride,
+        )
+
+        info_kwargs = dict(extract_cfg=cfg.to_dict(), ds_name=ds_name, split_type=split_type, f=f, date=pd.Timestamp.now().isoformat(),)
+        
+        if os.environ.get('TEST', False):
+            gen = batch_hidden_states(**gen_kwargs)
+            b =next(iter(gen))
+
+        # [DatasetInfo](https://github.com/huggingface/datasets/blob/9b21e181b642bd55b3ef68c1948bfbcd388136d6/src/datasets/info.py#L94)
+        ds1 = Dataset.from_generator(
+            generator=batch_hidden_states,
+            info=DatasetInfo(
+                description=json.dumps(info_kwargs, indent=2),
+                config_name=f,
+            ),
+            gen_kwargs=gen_kwargs,
+            num_proc=1,
+        )
+
+        # ## Add labels
+        # For our probe. Given next_token scores (logits) we take only the subset the corresponds to our negative tokens (e.g. False, no, ...) and positive tokens (e.g. Yes, yes, affirmative, ...).
+        def expand_choices(choices: List[str]) -> List[str]:
+            """expand out choices by adding versions that are upper, lower, whitespace, etc"""
+            new = []
+            for c in choices:
+                new.append(c)
+                new.append(c.upper())
+                new.append(c.capitalize())
+                new.append(c.lower())
+            return set(new)
+
+
+        # left_choices = list(r[0] for r in ds1['answer_choices'])+['no', 'false', 'negative', 'wrong']
+        # right_choices = list(r[1] for r in ds1['answer_choices'])+['yes', 'true', 'positive', 'right']
+        # left_choices, right_choices = expand_choices(left_choices), expand_choices(right_choices)
+        # assert len(set(left_choices).intersection(right_choices))==0
+        # expanded_choices = [left_choices, right_choices]
+        # expanded_choice_ids = choice2ids(expanded_choices, tokenizer)
+        # add_ans_exp = lambda r: scores2choice_probs(r, expanded_choice_ids, prefix="expanded_", keys=["scores0"])
+        # FIXME: we have the yes and no swapped
+        # FIXME: use k-mean closest tokens?
+        
+
+        # this is just based on pairs for that answer...
+        # FIXME of course I added a dim!
+        add_txt_ans0 = lambda r: {'txt_ans0': tokenizer.batch_decode(torch.softmax(torch.tensor(r['scores0']), 0).argmax(0))}
+
+        # Either just use the template choices
+        add_ans = lambda r: scores2choice_probs(r, row_choice_ids(r, tokenizer), keys=["scores0"])
+
+        # Or all expanded choices
+        ds1.set_format(type='numpy')#, columns=['input_ids', 'token_type_ids', 'attention_mask', 'label'])
+        ds3 = (
+            ds1
+            .map(add_ans, desc='add_ans') # slow?
+            # .map(add_ans_exp)
+            .map(add_txt_ans0, desc='add_txt_ans0')
+        )
+
+        ds3.save_to_disk(f)
+        print('! saved f=', f)
+        
+        try:
+            qc_ds(f)
+        except Exception as e:
+            logger.exception('QC failed')
+            # raise e
 
