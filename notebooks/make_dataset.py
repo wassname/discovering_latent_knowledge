@@ -354,7 +354,7 @@ def create_intervention(ds_name, ds_tokens, model, layer_names, N=10):
     
     ds_tokens_calib = ds_tokens.select(range(N-1))
     # TODO: do we need ds_name if we have the ds?
-    ds_calibration = create_hs_ds(ds_name+'_calib', ds_tokens_calib, model, cfg, intervention_dicts = None, f=f)
+    ds_calibration = create_hs_ds(ds_name+'_calib', ds_tokens_calib, model, cfg, intervention_dicts = None, f=None)
     
     activations = np.array(ds_calibration['head_activation']).squeeze(-1)
     labels = np.array(ds_calibration["label_true"]).astype(int)==1
@@ -366,6 +366,7 @@ def create_intervention(ds_name, ds_tokens, model, layer_names, N=10):
 def load_intervention(ds_name, cfg, model, tokenizer, model_name):
     num_heads = model.config.num_attention_heads
     intervention_f = root_folder / 'data' / 'interventions' / f'{model_name}.pkl'
+    intervention_f.parent.mkdir(exist_ok=True, parents=True)
     if not intervention_f.exists():
         layer_names, layer_inds = ExtractHiddenStates(model, tokenizer, layer_stride=cfg.layer_stride, layer_padding=cfg.layer_padding).get_layer_names()
         ds_tokens = load_preproc_dataset(ds_name, cfg, tokenizer, N=10)
@@ -416,8 +417,9 @@ if __name__ == "__main__":
 
     
 
+    sanitize = lambda s:s.replace('/', '').replace('-', '_') if s is not None else s
     ds_name = 'imdb'
-    model_name = cfg.model
+    model_name = sanitize(cfg.model)
     intervention, intervention_fn = load_intervention(ds_name, cfg, model, tokenizer, model_name)
 
     for ds_name in ds_names:
@@ -427,7 +429,6 @@ if __name__ == "__main__":
         # ## Save as Huggingface Dataset
         # get dataset filename
         N = len(ds_tokens)
-        sanitize = lambda s:s.replace('/', '').replace('-', '_') if s is not None else s
         dataset_name = f"{sanitize(cfg.model)}_{ds_name}_{split_type}_{N}"
         f = f"../.ds/{dataset_name}"
         

@@ -20,6 +20,7 @@ from elk.utils import (
 import functools
 from elk.extraction.balanced_sampler import BalancedSampler, FewShotSampler
 import pandas as pd
+from loguru import logger
 
 # Local path to the folder containing the templates
 TEMPLATES_FOLDER_PATH = Path(__file__).parent / "templates"
@@ -183,7 +184,10 @@ def load_prompts(
             answer_choices = prompt['answer_choices']
             a = answer_choices[0][:3]
             b = answer_choices[1][:3]
-            return (a != b) and ' ' not in a
+            keep = (a != b) and ' ' not in a
+            if not keep:
+                logger.debug(f"removing prompt because it's answers are not unique: {prompt['ds_string']} {prompt['template_name']} {prompt['answer_choices']}")
+            return keep
 
         prompts = list(filter(prompt_ok, prompts))
         prompts = prompt_sampler(prompts, seed=42+j)

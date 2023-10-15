@@ -1776,3 +1776,12 @@ How does the intervention work?
   - https://github.com/davidbau/baukit/blob/main/baukit/nethook.py
   - `out = edit_out(out, layer_name)`
   - but **honest_llama seperates it's states by head**. But are the intervening on the hiddenstate after output... no they are intervening on the layers... so head. Yeah it makes sense now!
+
+
+# 2023-10-15 18:48:00
+
+Ok so I got a center of mass intervention to the heads :)
+
+Now I just need to debug the dataloading script... nesxt week
+
+TODO: I need to split test train based on example_i, not row!
