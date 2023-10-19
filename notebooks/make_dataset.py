@@ -364,13 +364,13 @@ def create_intervention(ds_name, ds_tokens, model, layer_names, N=10):
     interventions = get_interventions_dict(activations, labels, layer_names, num_heads)
     return interventions
     
-def load_intervention(ds_name, cfg, model, tokenizer, model_name):
+def load_intervention(ds_name, cfg, model, tokenizer, model_name, N=30):
     num_heads = model.config.num_attention_heads
     intervention_f = root_folder / 'data' / 'interventions' / f'{model_name}.pkl'
     intervention_f.parent.mkdir(exist_ok=True, parents=True)
     if not intervention_f.exists():
         layer_names, layer_inds = ExtractHiddenStates(model, tokenizer, layer_stride=cfg.layer_stride, layer_padding=cfg.layer_padding).get_layer_names()
-        ds_tokens = load_preproc_dataset(ds_name, cfg, tokenizer, N=10)
+        ds_tokens = load_preproc_dataset(ds_name, cfg, tokenizer, N=N)
         interventions = create_intervention(ds_name, ds_tokens, model, layer_names)
         torch.save(interventions, intervention_f)
     else:
@@ -408,7 +408,7 @@ if __name__ == "__main__":
     cfg = args.run
     print(cfg)
 
-    BATCH_SIZE = 4  # None # None means auto # 6 gives 16Gb/25GB. where 10GB is the base model. so 6 is 6/15
+    BATCH_SIZE = 2  # None # None means auto # 6 gives 16Gb/25GB. where 10GB is the base model. so 6 is 6/15
 
 
     ds_names = cfg.datasets

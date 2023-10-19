@@ -18,7 +18,7 @@ class ExtractConfig(Serializable):
     # int4: bool = True
     # """Whether to perform inference in mixed int8 precision with `bitsandbytes`."""
 
-    max_examples: tuple[int, int] = (400, 400)
+    max_examples: tuple[int, int] = (800, 800)
     """Maximum number of examples to use from each split of the dataset."""
 
     num_shots: int = 1
@@ -41,11 +41,11 @@ class ExtractConfig(Serializable):
     seed: int = 42
     """Seed to use for prompt randomization. Defaults to 42."""
 
-    token_loc: Literal["first", "last", "mean"] = "last"
-    """The location of the token to extract hidden states from."""
+    # token_loc: Literal["first", "last", "mean"] = "last"
+    # """The location of the token to extract hidden states from."""
     
     template_path: str | None = None
     """Path to pass into `DatasetTemplates`. By default we use the dataset name."""
     
-    max_length: int | None = 1000
+    max_length: int | None = 555
     """Maximum length of the input sequence passed to the tokenize encoder function"""
