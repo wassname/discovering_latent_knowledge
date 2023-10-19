@@ -1785,3 +1785,7 @@ Ok so I got a center of mass intervention to the heads :)
 Now I just need to debug the dataloading script... nesxt week
 
 TODO: I need to split test train based on example_i, not row!
+TODO: the plotted and metric acc don't line up
+
+maybe I need both head and mlp?
+or just residual stream?
