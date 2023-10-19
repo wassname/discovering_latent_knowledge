@@ -35,13 +35,13 @@ from src.datasets.intervene import InterventionDict, intervention_meta_fn
 from functools import partial
 
 
-def noise_for_embeds(inputs_embeds, seed=42, std = 2e-2):
-    B, S, embed_dim = inputs_embeds.shape
-    with torch.random.fork_rng(devices=[inputs_embeds.device.index]):
-        torch.manual_seed(seed)
-        noise = torch.normal(0., std, (embed_dim, ))
-        noise = repeat(noise, 't -> b s t', b=B, s=S).to(inputs_embeds.device).to(inputs_embeds.dtype)
-    return noise
+# def noise_for_embeds(inputs_embeds, seed=42, std = 2e-2):
+#     B, S, embed_dim = inputs_embeds.shape
+#     with torch.random.fork_rng(devices=[inputs_embeds.device.index]):
+#         torch.manual_seed(seed)
+#         noise = torch.normal(0., std, (embed_dim, ))
+#         noise = repeat(noise, 't -> b s t', b=B, s=S).to(inputs_embeds.device).to(inputs_embeds.dtype)
+#     return noise
 
 def tcopy(x: torch.Tensor):
     return x.clone().detach().cpu()
@@ -90,11 +90,9 @@ class ExtractHiddenStates:
         
         # for "WizardLM/WizardCoder-Python-13B-V1.0"
         # HACK: depends on model layout
-        layers_names = [f"model.layers.{i}.self_attn" for i in range(self.model.config.num_hidden_layers)]
-        module_names = [k for k,v in self.model.named_modules()]
-        layers_not_found = set(layers_names)-set(module_names)
-        assert len(layers_not_found)==0, f"some layers not found in model: {layers_not_found}. we have {layers_names}"
-        return self.get_layer_selection(layers_names)
+        layers_names_h = [f"model.layers.{i}.self_attn" for i in range(self.model.config.num_hidden_layers)]
+        layers_names_mlp = [f"model.layers.{i}.mlp" for i in range(self.model.config.num_hidden_layers)]
+        return self.get_layer_selection(layers_names_h) + self.get_layer_selection(layers_names_mlp)
 
 
     def get_batch_of_hidden_states(
@@ -132,7 +130,7 @@ class ExtractHiddenStates:
         # forward pass
         last_token = -1
                 
-        layers_names, layer_inds = self.get_layer_names()
+        layers_names = self.get_layer_names()
         
         self.model.eval()
         
@@ -204,6 +202,10 @@ class ExtractHiddenStates:
 
         See also https://www.lesswrong.com/posts/bWxNPMy5MhPnQTzKz/what-discovering-latent-knowledge-did-and-did-not-find-4
         """
+        module_names = [k for k,v in self.model.named_modules()]
+        layers_not_found = set(layer_names)-set(module_names)
+        assert len(layers_not_found)==0, f"some layers not found in model: {layers_not_found}. we have {layer_names}"
+        
         # for self.layer_padding, skip the first few
         num_layers = len(layer_names)-1
         strided_layers = torch.arange(
@@ -214,7 +216,7 @@ class ExtractHiddenStates:
         # for self.layer_padding ALWAYS include the last few. Why, this is based on the intuition that the last layers may be the most valuable
         last_few = torch.arange(num_layers-self.layer_padding, num_layers).tolist()
         layers_inds = sorted(set(list(strided_layers)+list(last_few)))
-        return [layer_names[i] for i in layers_inds], layers_inds
+        return [layer_names[i] for i in layers_inds]
 
 def detachcpu(x):
     """

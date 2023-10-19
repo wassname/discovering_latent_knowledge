@@ -42,7 +42,7 @@ from src.datasets.load import ds2df
 from src.datasets.load import rows_item
 from src.datasets.batch import batch_hidden_states
 # from src.datasets.scores import choice2ids, scores2choice_probs
-
+from src.helpers.ds import shuffle_dataset_by
 from src.datasets.hs import ExtractHiddenStates
 from itertools import chain
 import functools
@@ -266,12 +266,12 @@ def load_preproc_dataset(ds_name: str, cfg: ExtractConfig, tokenizer: PreTrained
         .map(lambda r: {'choice_ids': row_choice_ids(r, tokenizer)}, desc='choice_ids')
     )
     
-    ds_tokens = ds_tokens.filter(lambda r: r['truncated']==False)
-    inds = list(range(min(len(ds_tokens), N)))
-    random.shuffle(inds)
-    ds_tokens = ds_tokens.select(inds)    
+
+    
+    ds_tokens = shuffle_dataset_by(ds_tokens, 'example_i')
     print('removed truncated rows to leave: num_rows', ds_tokens.num_rows)
     return ds_tokens
+
 
 def row_choice_ids(r, tokenizer):
     return choice2ids([[c] for c in r['answer_choices']], tokenizer)
@@ -359,18 +359,17 @@ def create_intervention(ds_name, ds_tokens, model, layer_names, N=10):
     
     activations = np.array(ds_calibration['head_activation']).squeeze(-1)
     labels = np.array(ds_calibration["label_true"]).astype(int)==1
-    num_heads = model.config.num_attention_heads
     
-    interventions = get_interventions_dict(activations, labels, layer_names, num_heads)
+    interventions = get_interventions_dict(activations, labels, layer_names)
     return interventions
     
-def load_intervention(ds_name, cfg, model, tokenizer, model_name, N=30):
+def load_intervention(ds_name, cfg, model, tokenizer, model_name, N=50):
     num_heads = model.config.num_attention_heads
     intervention_f = root_folder / 'data' / 'interventions' / f'{model_name}.pkl'
     intervention_f.parent.mkdir(exist_ok=True, parents=True)
     if not intervention_f.exists():
-        layer_names, layer_inds = ExtractHiddenStates(model, tokenizer, layer_stride=cfg.layer_stride, layer_padding=cfg.layer_padding).get_layer_names()
-        ds_tokens = load_preproc_dataset(ds_name, cfg, tokenizer, N=N)
+        layer_names = ExtractHiddenStates(model, tokenizer, layer_stride=cfg.layer_stride, layer_padding=cfg.layer_padding).get_layer_names()
+        ds_tokens = load_preproc_dataset(ds_name, cfg, tokenizer, N=N*2)
         interventions = create_intervention(ds_name, ds_tokens, model, layer_names)
         torch.save(interventions, intervention_f)
     else:
@@ -431,7 +430,7 @@ if __name__ == "__main__":
         # get dataset filename
         N = len(ds_tokens)
         dataset_name = f"{sanitize(cfg.model)}_{ds_name}_{split_type}_{N}"
-        f = f"../.ds/{dataset_name}"
+        f = root_folder / '.ds'/ "{dataset_name}"
         
         ds1 = create_hs_ds(ds_name, ds_tokens, model, cfg, intervention_dicts=intervention, f=f)
 

@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from src.datasets.load import ds2df
 from datasets.arrow_dataset import Dataset
 from einops import rearrange, reduce, repeat
-
+from src.helpers.ds import shuffle_dataset_by
 
 # def compute_distance(df):
 #     """distance between ans1 and ans2."""
@@ -17,6 +17,9 @@ from einops import rearrange, reduce, repeat
 
 to_tensor = lambda x: torch.from_numpy(x).float()
 to_ds = lambda hs0, y: TensorDataset(to_tensor(hs0), to_tensor(y))
+
+
+
 
 class imdbHSDataModule(pl.LightningDataModule):
 
