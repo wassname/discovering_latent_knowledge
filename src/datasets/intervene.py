@@ -18,8 +18,10 @@ def get_magnitude(activations: np.ndarray, labels: np.ndarray) -> Tuple[np.ndarr
     refactored to from https://github.com/likenneth/honest_llama/blob/e010f82bfbeaa4326cef8493b0dd5b8b14c6da67/utils.py#L698
     to use einops and vector ops instead of for loop
     """    
-    true_mass_mean = reduce(activations[labels], ' b l d -> l d', 'mean')
-    false_mass_mean = reduce(activations[~labels], ' b l d -> l d', 'mean')
+    # batch length hidden_dim
+    # TODO: maybe I should just get COM for last token instead?
+    true_mass_mean = reduce(activations[labels], 'b l d -> l d', 'mean')
+    false_mass_mean = reduce(activations[~labels], 'b l d -> l d', 'mean')
     direction = true_mass_mean - false_mass_mean
     direction = direction / np.linalg.norm(direction, axis=1, keepdims=True) # sq norm per layer
     activations = reduce(activations, ' b l d -> l d', 'mean')
@@ -51,9 +53,18 @@ def intervention_meta_fn(outputs: torch.Tensor, layer_name:str, interventions: I
             ...
     
     """
-    output, a, b = outputs
+    if type(outputs) is tuple:
+        # head_output
+        output = outputs[0]
+    elif type(outputs) is torch.Tensor:
+        output = outputs
+    else:
+        raise ValueError(f"outputs must be tuple or tensor, got {type(outputs)}")
+        
     for direction, proj_val_std in interventions[layer_name]:
         # head_output: (batch_size, seq_len, layer_size)
-        output[:, -1:, :] += torch.from_numpy(alpha * proj_val_std * direction).to(output.device)
-    outputs = (output, a, b)
-    return outputs
+        output[:, :, :] += torch.from_numpy(alpha * proj_val_std * direction).to(output.device)[None, None, :]
+    if type(outputs) is tuple:
+        return tuple([output, *outputs[1:]])
+    else:
+        return output

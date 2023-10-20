@@ -60,7 +60,7 @@ def counterfactual_loss(model, scores, token_y, token_n):
 
 def stack_trace_returns(ret: TraceDict, names: List[str]) -> torch.Tensor:
     hs = [ret[h].output for h in names]
-    hs = [h[0] if isinstance(h, tuple) else h for h in hs]
+    hs = [h[0] if isinstance(h, tuple) else h for h in hs] # from a head it's a tuple
     return rearrange(hs, 'layers b s hs -> b layers s hs')[:, :, -1]
 
 # def stack_trace_grad_returns(ret: TraceDict, names: List[str]) -> torch.Tensor:
@@ -138,9 +138,8 @@ class ExtractHiddenStates:
         if self.intervention_dicts is not None:
             # extraction mode
             # 15 is a magic number from honest_llama
-            num_heads = self.model.config.num_attention_heads
-            intervention_fn1 = partial(intervention_meta_fn, interventions=self.intervention_dicts, num_heads=num_heads, alpha=-15)
-            intervention_fn2 = partial(intervention_meta_fn, interventions=self.intervention_dicts, num_heads=num_heads, alpha=15)
+            intervention_fn1 = partial(intervention_meta_fn, interventions=self.intervention_dicts, alpha=-15)
+            intervention_fn2 = partial(intervention_meta_fn, interventions=self.intervention_dicts, alpha=15)
             edit_outputs = [intervention_fn1, intervention_fn2]
         else:
             # calibration mode

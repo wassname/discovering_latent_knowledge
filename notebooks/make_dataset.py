@@ -364,7 +364,6 @@ def create_intervention(ds_name, ds_tokens, model, layer_names, N=10):
     return interventions
     
 def load_intervention(ds_name, cfg, model, tokenizer, model_name, N=50):
-    num_heads = model.config.num_attention_heads
     intervention_f = root_folder / 'data' / 'interventions' / f'{model_name}.pkl'
     intervention_f.parent.mkdir(exist_ok=True, parents=True)
     if not intervention_f.exists():
@@ -377,7 +376,7 @@ def load_intervention(ds_name, cfg, model, tokenizer, model_name, N=50):
     
     interventions = torch.load(intervention_f)
         
-    intervention_fn = partial(intervention_meta_fn, interventions=interventions, num_heads=num_heads)
+    intervention_fn = partial(intervention_meta_fn, interventions=interventions)
     return interventions, intervention_fn
 
 
@@ -432,7 +431,7 @@ if __name__ == "__main__":
         dataset_name = f"{sanitize(cfg.model)}_{ds_name}_{split_type}_{N}"
         f = root_folder / '.ds'/ "{dataset_name}"
         
-        ds1 = create_hs_ds(ds_name, ds_tokens, model, cfg, intervention_dicts=intervention, f=f)
+        ds1 = create_hs_ds(ds_name, ds_tokens, model, cfg, intervention_dicts=intervention, f=str(f))
 
         ds3 = post_proc_hs_ds(ds1, tokenizer)
         ds3.save_to_disk(f)
