@@ -182,7 +182,8 @@ def qc_ds(f):
     for k in large_arrays_keys:
         print('-'*80)
         print(k)
-        hs = ds5[k]
+        max_rows = 1000
+        hs = ds5[k][:max_rows]
         X = hs.reshape(hs.shape[0], -1)
 
 
@@ -190,7 +191,6 @@ def qc_ds(f):
 
         # split
         n = len(y)
-        max_rows = 1000
         
         X_train, X_test = X[:n//2], X[n//2:]
         y_train, y_test = y[:n//2], y[n//2:]
@@ -429,7 +429,7 @@ if __name__ == "__main__":
         # get dataset filename
         N = len(ds_tokens)
         dataset_name = f"{sanitize(cfg.model)}_{ds_name}_{split_type}_{N}"
-        f = root_folder / '.ds'/ "{dataset_name}"
+        f = root_folder / '.ds'/ f"{dataset_name}"
         
         ds1 = create_hs_ds(ds_name, ds_tokens, model, cfg, intervention_dicts=intervention, f=str(f))
 

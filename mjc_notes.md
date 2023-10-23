@@ -1791,3 +1791,13 @@ bugs?:
 ideas:
 - maybe I need both head and mlp?
 - or just residual stream?
+
+# 2023-10-23 15:07:58
+
+After reading https://github.dev/andyzoujm/representation-engineering/tree/main/repe_eval/examples/decoder_repe_eval.ipynb
+
+- use pipelines <3
+- use their pca code
+- use the diff of hidden states
+- use their intervention pipeline
+- and chain to a dataset?

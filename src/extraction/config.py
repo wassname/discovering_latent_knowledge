@@ -18,7 +18,7 @@ class ExtractConfig(Serializable):
     # int4: bool = True
     # """Whether to perform inference in mixed int8 precision with `bitsandbytes`."""
 
-    max_examples: tuple[int, int] = (800, 800)
+    max_examples: tuple[int, int] = (600, 600)
     """Maximum number of examples to use from each split of the dataset."""
 
     num_shots: int = 1
