@@ -35,7 +35,7 @@ class RepControlPipeline(RepControlPipeline2):
         self.layers = layers
         self.max_length = max_length
 
-        super().__init__(model=model, tokenizer=tokenizer, **kwargs)
+        super().__init__(model=model, tokenizer=tokenizer, max_length=max_length, **kwargs)
         
     def __call__(self, text_inputs, activations=None, **kwargs):
         if activations is not None:

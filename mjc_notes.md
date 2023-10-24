@@ -1821,4 +1821,7 @@ Ok what should my pipeline do?
 
 
 TODO:
-- [ ] change layer -1 to actual name?
+- [x] change layer -1 to actual name?
+- [ ] in the TQS notebook they only get the mean from the generated tokens
+- [ ] they only interven on the ones that are not padded... wait no they passed in no token pos in honesty
+- [ ] but they did in TQA

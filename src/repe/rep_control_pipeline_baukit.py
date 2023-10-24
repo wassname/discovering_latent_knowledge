@@ -20,6 +20,7 @@ def row_choice_ids(answer_choices, tokenizer):
 
 
 def intervene(output, activation):
+    # TODO need attention mask
     assert output.ndim == 3, f"expected output to be (batch, seq, vocab), got {output.shape}"
     return output + activation.to(output.device)[None, None, :]
 
