@@ -33,11 +33,12 @@ class WrappedBlock(torch.nn.Module):
             # we should ignore the padding tokens when doing the activation addition
             # mask has ones for non padding tokens and zeros at padding tokens.
             # only tested this on left padding
-            elif "position_ids" in kwargs:
+            elif ("position_ids" in kwargs) and not self.token_pos:
                 pos = kwargs["position_ids"]
+                pos = pos.repeat(modified.shape[0], 1, 1)
                 zero_indices = (pos == 0).cumsum(1).argmax(1, keepdim=True)
                 col_indices = torch.arange(pos.size(1), device=pos.device).unsqueeze(0)
-                target_shape = pos.shape
+                target_shape = modified.shape
                 mask = (col_indices >= zero_indices).float().reshape(target_shape[0], target_shape[1], 1)
                 mask = mask.to(modified.dtype)
             else:
@@ -51,6 +52,7 @@ class WrappedBlock(torch.nn.Module):
             self.controller = self.controller.to(modified.device)
             if type(mask) == torch.Tensor:
                 mask = mask.to(modified.device)
+                
             if isinstance(self.token_pos, int):
                 modified[:, self.token_pos] = modified[:, self.token_pos] + self.controller * mask
             elif isinstance(self.token_pos, list) or isinstance(self.token_pos, tuple) or isinstance(self.token_pos, np.ndarray):

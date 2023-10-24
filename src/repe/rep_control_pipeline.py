@@ -37,10 +37,10 @@ class RepControlPipeline(RepControlPipeline2):
 
         super().__init__(model=model, tokenizer=tokenizer, max_length=max_length, **kwargs)
         
-    def __call__(self, text_inputs, activations=None, **kwargs):
+    def __call__(self, text_inputs, activations=None, token_pos=None, masks=None, normalize=False, **kwargs):
         if activations is not None:
             self.wrapped_model.reset()
-            self.wrapped_model.set_controller(self.layers, activations, self.block_name)
+            self.wrapped_model.set_controller(self.layers, activations, self.block_name, token_pos=token_pos, masks=masks, normalize=normalize)
 
         outputs = super().__call__(text_inputs, **kwargs)
         self.wrapped_model.reset()
