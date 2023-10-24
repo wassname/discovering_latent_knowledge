@@ -1,7 +1,8 @@
 from transformers import AutoModel, AutoModelForCausalLM
 from transformers.pipelines import PIPELINE_REGISTRY
 from .rep_reading_pipeline import RepReadingPipeline
-from .rep_control_pipeline import RepControlPipeline, RepControlPipeline2
+from .rep_control_pipeline import RepControlPipeline
+from .rep_control_pipeline_baukit import RepControlPipeline2
 
 def repe_pipeline_registry():
     PIPELINE_REGISTRY.register_pipeline(
