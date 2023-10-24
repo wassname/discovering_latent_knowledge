@@ -1825,3 +1825,7 @@ TODO:
 - [ ] in the TQS notebook they only get the mean from the generated tokens
 - [ ] they only interven on the ones that are not padded... wait no they passed in no token pos in honesty
 - [ ] but they did in TQA
+
+OK so I got my pipeline working, and it's the same. And it uses the PCA.
+
+Next step simply, and put into a dataset. Then I can try the ranking

@@ -5,12 +5,11 @@ from transformers.pipelines import (
     Pipeline,
 )
 from transformers.pipelines.base import GenericTensor
-from .rep_control_reading_vec import WrappedReadingVecModel
 from typing import List, Tuple, Dict, Any, Union, NewType
 from baukit.nethook import Trace, TraceDict, recursive_copy
 from functools import partial
 from src.datasets.scores import choice2ids
-from src.datasets.scores import scores2choice_probs
+# from src.datasets.scores import scores2choice_probs
 
 
 Activations = NewType("InterventionDict", Dict[str, torch.Tensor])
