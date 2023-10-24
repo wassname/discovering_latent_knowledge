@@ -24,7 +24,7 @@ from torch import Tensor
 import pickle
 import hashlib
 from pathlib import Path
-
+from pathvalidate import sanitize_filename
 import transformers
 from transformers import GPTQConfig
 from datasets import Dataset, DatasetInfo
@@ -278,7 +278,7 @@ def load_preproc_dataset(ds_name: str, cfg: ExtractConfig, tokenizer: PreTrained
 
 
 def row_choice_ids(r, tokenizer):
-    return choice2ids([[c] for c in r['answer_choices']], tokenizer)
+    return choice2ids([c for c in r['answer_choices']], tokenizer)
 
 
 def expand_choices(choices: List[str]) -> Set[str]:
@@ -419,11 +419,8 @@ if __name__ == "__main__":
 
     model, tokenizer = load_model(cfg.model)
 
-    
-
-    sanitize = lambda s:s.replace('/', '').replace('-', '_') if s is not None else s
     ds_name = 'imdb'
-    model_name = sanitize(cfg.model)
+    model_name = sanitize_filename(cfg.model)
     intervention, intervention_fn = load_intervention(ds_name, cfg, model, tokenizer, model_name)
 
     for ds_name in ds_names:
@@ -433,7 +430,7 @@ if __name__ == "__main__":
         # ## Save as Huggingface Dataset
         # get dataset filename
         N = len(ds_tokens)
-        dataset_name = f"{sanitize(cfg.model)}_{ds_name}_{split_type}_{N}"
+        dataset_name = f"{sanitize_filename(cfg.model)}_{ds_name}_{split_type}_{N}"
         f = root_folder / '.ds'/ f"{dataset_name}"
         
         ds1 = create_hs_ds(ds_name, ds_tokens, model, cfg, intervention_dicts=intervention, f=str(f))

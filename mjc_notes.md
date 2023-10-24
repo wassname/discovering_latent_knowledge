@@ -1828,4 +1828,16 @@ TODO:
 
 OK so I got my pipeline working, and it's the same. And it uses the PCA.
 
-Next step simply, and put into a dataset. Then I can try the ranking
+
+# 2023-10-24 16:58:30
+
+ - [x] Next step simply, 
+ - [ ] and put into a dataset. 
+   - [ ] make sure I clean up the dataset script
+ - [ ] Then I can try the ranking
+
+
+we need to save cache load
+honesty_rep_reader both directions and signs!
+or activations
+

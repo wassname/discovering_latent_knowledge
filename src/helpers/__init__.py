@@ -5,3 +5,4 @@ def bool2switch(x):
 def switch2bool(x):
     """[-1,1]->[0,1]"""
     return (x+1)/2
+

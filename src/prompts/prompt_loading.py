@@ -232,6 +232,12 @@ def _convert_to_prompts(
 
     for template in templates:
         answer_choices=template.get_fixed_answer_choices_list()
+        
+        # skip prompts where the responses are similar in the first token
+        if answer_choices[0][:3]==answer_choices[1][:3]:
+            logger.debug(f"skipping prompt because it's answers are not unique (for the first token): {template.name} {answer_choices}")
+            continue
+        answer_choices = [[c] for c in answer_choices]
         for instructed_to_lie in [False, True]:
             for sys_instr_name, sys_instr in sys_instructions[instructed_to_lie].items():
                 fake_example = example.copy()
@@ -256,7 +262,7 @@ def _convert_to_prompts(
                     ]
                     for d in fewshot_texts:
                         # some of the answers have extra trailing text, that's OK. But extra preceeding text is not, let's check for that
-                        assert any([d['response'].startswith(a) for a in answer_choices]), f"fewshot response `{d['response']}` has extra preceeding text compared to allowed choices: {answer_choices}. template is: {template.name}"
+                        assert any([any([d['response'].startswith(a) for a in ac]) for ac in answer_choices]), f"fewshot response `{d['response']}` has extra preceeding text compared to allowed choices: {answer_choices}. template is: {template.name}"
                     prompt_parts = fewshot_texts + prompt_parts
                     
                 prompt_parts[0]['system'] = sys_instr

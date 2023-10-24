@@ -10,15 +10,8 @@ from transformers import (
     PreTrainedModel
 )
 
-default_class2choices = {False: ['No', 'Negative', 'no', 'false', 'wrong', 'False'], True: ['Yes', 'Positive', 'yes', 'true', 'correct', 'right', 'True']}
+default_class2choices = [['No', 'Negative', 'negative', 'no', 'false', 'wrong', 'False', '0'], ['Yes', 'Positive', 'positive', 'yes', 'true', 'correct', 'right', 'True', '1']]
 
-# def class2choices_to_choices(class2choices):
-#     return [class2choices[i][0] for i in sorted(class2choices)]
-
-# def label_to_choice(label: bool, class2choices=default_class2choices) -> str:
-#     """turns a label like 0 to a choice like No"""
-#     choices = class2choices_to_choices(class2choices)
-#     return choices[label]
 
 def scores2choice_probs(row, class2_ids: List[List[int]], keys=["scores0"], prefix=""):
     """ Given next_token scores (logits) we take only the subset the corresponds to our
@@ -79,23 +72,14 @@ def choice2id(tokenizer, c: str, whitespace_first=False) -> List[int]:
 
 def choice2ids(all_choices: List[List[str]], tokenizer: PreTrainedTokenizer) -> List[List[int]]:
     choices = [list(itertools.chain(*[choice2id(tokenizer, c) for c in choices])) for choices in all_choices]
-    assert choices[0]!=choices[1], "choices should be different"
+    assert choices[0]!=choices[1], f"choices should be different but were not {all_choices}"
     assert choices[0][0]!=choices[1][0], "choices should be different"
     return choices
 
-# def get_choice_as_token(tokenizer, choice: str) -> int:
-#     return get_choices_as_tokens(tokenizer, [choice])[0]
 
-# def get_choices_as_tokens(
-#     tokenizer, choices:List[str] = ["Positive"], whitespace_first=True
-# ) -> List[int]:
-    
-    
-#     ids = []
-#     for c in choices:
-#         try:
-#             id_ = choice2id(tokenizer, c)
-#             ids.append(id_)
-#         except AssertionError as e:
-#             print(e)
-#     return ids
+def scores2choice_probs2(logits, choiceids: List[List[int]]):
+    """calculate the probability for each group of choices."""
+    assert logits.ndim==1, f"expected logits to be 1d, got {logits.shape}"
+    probs = torch.softmax(logits, 0)  # shape [tokens, inferences)
+    probs_c = torch.tensor([[probs[cc] for cc in c] for c in choiceids]).sum(1)  # sum over alternate choices e.g. [['decrease', 'dec'],['inc', 'increase']]
+    return probs_c
