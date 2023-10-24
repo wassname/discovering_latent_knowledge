@@ -1801,3 +1801,24 @@ After reading https://github.dev/andyzoujm/representation-engineering/tree/main/
 - use the diff of hidden states
 - use their intervention pipeline
 - and chain to a dataset?
+
+
+I probobly don't need to wrap the model... just use baukit instead?
+
+Ok what should my pipeline do?
+- take in text (they all do)
+- params
+  - no cache
+  - return hidden states
+- subclass 
+  - text_classification? maybe
+  - feature extr (no text) but simple
+  - text_gen: very complex... adds whole prompt
+- output text, scores, choice_scores, and hidden states
+  - but text and scores for only for the last, generated token
+- args: 
+  - call: choice_ids, activations
+
+
+TODO:
+- [ ] change layer -1 to actual name?

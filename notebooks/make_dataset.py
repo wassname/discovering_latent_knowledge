@@ -225,6 +225,8 @@ def qc_ds(f):
     
     
 def load_preproc_dataset(ds_name: str, cfg: ExtractConfig, tokenizer: PreTrainedTokenizerBase, split_type:str="train", N=None) -> Dataset:
+    """load a preprocessed dataset of tokens."""
+    # TODO refactor out cfg
     if N is None:
         N = cfg.max_examples[split_type!="train"]
     ds_prompts = Dataset.from_generator(
@@ -265,6 +267,8 @@ def load_preproc_dataset(ds_name: str, cfg: ExtractConfig, tokenizer: PreTrained
         )
         .map(lambda r: {'choice_ids': row_choice_ids(r, tokenizer)}, desc='choice_ids')
     )
+    
+    
     
 
     
@@ -323,6 +327,7 @@ def post_proc_hs_ds(ds1, tokenizer):
     return ds3
 
 def create_hs_ds(ds_name, ds_tokens, model, cfg, intervention_dicts = [None, ], f = None, split_type="train"):
+    "create a dataset of hidden states."""
     info_kwargs = dict(extract_cfg=cfg.to_dict(), ds_name=ds_name, split_type=split_type, f=f, date=pd.Timestamp.now().isoformat(),)
     
     # first we make the calibration dataset with no intervention

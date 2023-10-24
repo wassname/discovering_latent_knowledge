@@ -148,7 +148,7 @@ class ExtractHiddenStates:
         with torch.no_grad():
             multi_outs = defaultdict(list)
             for edit_output in edit_outputs:
-                with TraceDict(self.model, layers_names, retain_grad=True, detach=True, edit_output=edit_output) as ret:
+                with TraceDict(self.model, layers_names, retain_grad=False, detach=True, edit_output=edit_output) as ret:
                     model_inputs = self.model.prepare_inputs_for_generation(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
                     outputs = self.model.forward(
                         **model_inputs,
