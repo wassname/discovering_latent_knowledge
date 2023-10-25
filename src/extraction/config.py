@@ -47,5 +47,5 @@ class ExtractConfig(Serializable):
     template_path: str | None = None
     """Path to pass into `DatasetTemplates`. By default we use the dataset name."""
     
-    max_length: int | None = 666
+    max_length: int | None = 700
     """Maximum length of the input sequence passed to the tokenize encoder function"""

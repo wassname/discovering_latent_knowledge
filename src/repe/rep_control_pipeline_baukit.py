@@ -69,35 +69,23 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         
         # self.default_class2choiceids = choice2ids(default_class2choices, tokenizer)
 
-    def __call__(self, model_inputs, activations=None, **kwargs):
-        with torch.no_grad():
-            if activations is not None:                
-                layers_names = [self.layer_name_tmpl.format(i) for i in activations.keys()]
-                
-                # make intervention functions
-                activations_pos_i = Activations({self.layer_name_tmpl.format(k):v for k,v in activations.items()})
-                activations_neg_i = Activations({self.layer_name_tmpl.format(k):-v for k,v in activations.items()})
-                
-                edit_fn = partial(intervention_meta_fn2, activations=activations_pos_i)
-                with TraceDict(
-                    self.model, layers_names, detach=True, edit_output=edit_fn
-                ) as ret:
-                    outputs_pos = super().__call__(model_inputs, **kwargs)
-                    
-                edit_fn2 = partial(intervention_meta_fn2, activations=activations_neg_i)
-                with TraceDict(
-                    self.model, layers_names, detach=True, edit_output=edit_fn2
-                ) as ret:
-                    outputs_neg = super().__call__(model_inputs, **kwargs)
-                    
-                outputs = super().__call__(model_inputs, **kwargs)
-                
-                # TODO stack the hidden states, and scores
-                pass
-                
-            else:
-                outputs = super().__call__(model_inputs, **kwargs)
-        return outputs
+    def __call__(self, model_inputs, **kwargs):
+        return super().__call__(model_inputs, **kwargs)
+    
+    def _sanitize_parameters(self, truncation=None, tokenize_kwargs=None, return_tensors=None, activations=None, **kwargs):
+        """This processed the init params."""
+        if tokenize_kwargs is None:
+            tokenize_kwargs = {}
+
+        preprocess_params = tokenize_kwargs
+
+        forward_params = {'activations': activations}
+        
+        postprocess_params = {}
+        if return_tensors is not None:
+            postprocess_params["return_tensors"] = return_tensors
+
+        return preprocess_params, forward_params, postprocess_params
     
     def preprocess(self, inputs: dict, **tokenize_kwargs) -> Dict[str, GenericTensor]:
         # tokenize a batch of inputs
@@ -117,9 +105,15 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         inputs["attention_mask"] = torch.tensor(inputs['attention_mask'], dtype=torch.bool, device=self.model.device)
         return inputs
 
-    def _forward(self, inputs) -> ModelOutput:
-        
+    def _forward(self, inputs, activations) -> ModelOutput:
         assert inputs['input_ids'].ndim == 2, f"expected input_ids to be (batch, seq), got {inputs['input_ids'].shape}"
+
+        # make intervention functions
+        layers_names = [self.layer_name_tmpl.format(i) for i in activations.keys()]                
+        activations_pos_i = Activations({self.layer_name_tmpl.format(k):v for k,v in activations.items()})
+        activations_neg_i = Activations({self.layer_name_tmpl.format(k):-v for k,v in activations.items()})
+        edit_fn_pos = partial(intervention_meta_fn2, activations=activations_pos_i)
+        edit_fn_neg = partial(intervention_meta_fn2, activations=activations_neg_i)
         
         self.model.eval()
         model_in = dict(
@@ -129,11 +123,30 @@ class RepControlPipeline2(FeatureExtractionPipeline):
             output_hidden_states=True,
             return_dict=True
         )
-        with torch.no_grad():
-            o = self.model(**model_in)
         
-        # hidden states come at as lists of layers, lets concat them
-        o['hidden_states'] = rearrange(list(o['hidden_states']), 'l b t h -> b l t h')
+        def transform_model_output(o):
+            # hidden states come at as lists of layers, lets stack them
+            o['hidden_states'] = rearrange(list(o['hidden_states']), 'l b t h -> b l t h')
+            
+            # we only want the last token
+            o = ModelOutput(end_hidden_states=o['hidden_states'][:, :, -1], end_logits=o['logits'][:, -1])
+            
+            return o
+        
+        # intervent in the negative and positive direction
+        with torch.no_grad():
+            with TraceDict(
+                self.model, layers_names, detach=True, edit_output=edit_fn_pos
+            ) as ret:
+                outputs_pos = transform_model_output(self.model(**model_in))
+                
+            with TraceDict(
+                self.model, layers_names, detach=True, edit_output=edit_fn_neg
+            ) as ret:
+                outputs_neg = transform_model_output(self.model(**model_in))
+                
+        # stack the outputs
+        o = {k: torch.stack([outputs_neg[k], outputs_pos[k]], -1) for k in outputs_neg.keys()}
         
         # batch of outputs and inputs. retain some of the inputs
         return ModelOutput(**o, **inputs)
@@ -153,12 +166,8 @@ class RepControlPipeline2(FeatureExtractionPipeline):
             return res
         
     def postprocess_single(self, o: dict) -> dict:
-        assert isinstance(o, dict) and o['logits'].ndim==2, f"expected dict with logits of shape (seq, vocab), got {o['logits'].shape}"
+        assert isinstance(o, dict) and o['end_logits'].ndim==2, f"expected dict with logits of shape (seq, vocab), got {o['end_logits'].shape}"
         # assert o['logits'].shape[0]==1, f"postprocess expected batch size 1, got {o['logits'].shape[0]}"
-        # This is called once for each result, but the text pipeline is set up to hande multiple...
-        o['last_hidden_states'] = o['hidden_states'][:, -1]
-        
-        o["end_logits"] = o["logits"][-1, :].float()
         
         input_ids = torch.tensor(o['input_ids'], dtype=torch.long)
         o["input_truncated"] = self.tokenizer.decode(input_ids)
@@ -173,13 +182,15 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         
         o['choice_ids'] = row_choice_ids(answer_choices, self.tokenizer)
         
-        p = o['add_ans'] = scores2choice_probs2(o['end_logits'], o['choice_ids']) 
-        o['ans'] = p[1] / (torch.sum(p) + 1e-5)
+        ii = o['end_logits'].shape[1]
+        p = o['add_ans'] = torch.stack([scores2choice_probs2(o['end_logits'][:, i], o['choice_ids']) for i in range(ii)], 1)
+        o['ans'] = p[1] / (torch.sum(p, 0) + 1e-5)
         
         
         # lets delete all the large arrays we don't need. We don't need anything with 3 dims, as we only need the things from the last token
         for k in ['input_ids', 'attention_mask', 'logits', 'hidden_states']:
-            del o[k]
+            if k in o:
+                del o[k]
         
         # ah to make a dataset we need to return one at a time, right now it's Dict[str, Batch]. e.g. hiddenstates={layer_1:[2, 555, 5120]....
         o = hacky_sanitize_outputs(o)

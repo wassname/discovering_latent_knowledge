@@ -42,7 +42,9 @@ repe_pipeline_registry()
 from src.models.load import load_model
 from src.extraction.config import ExtractConfig
 from src.prompts.prompt_loading import load_preproc_dataset
+import pickle
 
+from src.config import root_folder
 import json
 # from datasets import Dataset, DatasetInfo
 import datasets
@@ -71,6 +73,8 @@ print(cfg)
 model, tokenizer = load_model(cfg.model)
 
 
+tokenizer_args=dict(padding="max_length", max_length=cfg.max_length, truncation=True, add_special_tokens=True)
+
 # %%
 # # cache busting for the transformers map and ds steps
 # !rm -rf ~/.cache/huggingface/datasets/generator
@@ -80,10 +84,7 @@ model, tokenizer = load_model(cfg.model)
 # # Intervention fit/load
 
 # %%
-import pickle
 
-from src.config import root_folder
-tokenizer_args=dict(padding="max_length", max_length=cfg.max_length, truncation=True, add_special_tokens=True)
             
 def load_rep_reader(model, tokenizer, cfg, N_fit_examples=20, batch_size=2, rep_token = -1, n_difference = 1, direction_method = 'pca'):
     """
@@ -141,30 +142,8 @@ hidden_layers
 # %%
 
 
-
-# %%
-# load dataset
-ds_name = cfg.datasets[0]
-ds_tokens = load_preproc_dataset(ds_name, tokenizer, N=sum(cfg.max_examples), seed=cfg.seed, num_shots=cfg.num_shots, max_length=cfg.max_length)
-
-N_train_split = (len(ds_tokens) - N_fit_examples) //2
-
-# split the dataset, it's preshuffled
-dataset_fit = ds_tokens.select(range(N_fit_examples))
-dataset_train = ds_tokens.select(range(N_fit_examples, N_train_split))
-dataset_test = ds_tokens.select(range(N_train_split, len(ds_tokens)))
-assert len(dataset_train)>3, f"dataset_train is too small {len(dataset_train)}"
-assert len(dataset_test)>3
-
-
-
 # %% [markdown]
 # # Control helpers
-
-# %%
-inputs = dataset_train[:3]
-inputs['question']
-
 
 # %%
 def metrics(control_outputs_neg, baseline_outputs, control_outputs):
@@ -209,18 +188,19 @@ rep_control_pipeline2
 # %%
 
 coeff=8.0
-max_new_tokens=1
 
 activations = {}
 for layer in hidden_layers:
     activations[layer] = torch.tensor(coeff * honesty_rep_reader.directions[layer] * honesty_rep_reader.direction_signs[layer]).to(model.device).half()
     
 
-activations_neg = {k:-v for k,v in activations.items()}
+
 
 
 # %%
 if TEST:
+    inputs = dataset_train[:3]
+
     # unit test: with multiple input types: single, list, generator, dataset
     ## single
     input_types = {'single':dataset_train[0], 'list':[dataset_train[i] for i in range(3)], 'generator':iter(dataset_train.select(range(3))), 'dataset':dataset_train.select(range(3)).to_iterable_dataset()}
@@ -242,6 +222,7 @@ if TEST:
 # test intervention quality
 # TODO perhaps move this to intervention create/load/cache
 if TEST:
+    activations_neg = {k:-v for k,v in activations.items()}
     model.eval()
     with torch.no_grad():
         baseline_outputs = rep_control_pipeline2(inputs, batch_size=batch_size)
@@ -294,11 +275,27 @@ def create_hs_ds(ds_name, ds_tokens, pipeline, activations=None, f = None, batch
     return ds1, f
 
 
+from src.helpers.torch import clear_mem
 
+for ds_name in cfg.datasets:
+    
+    # load dataset
+    ds_name = cfg.datasets[0]
+    ds_tokens = load_preproc_dataset(ds_name, tokenizer, N=sum(cfg.max_examples), seed=cfg.seed, num_shots=cfg.num_shots, max_length=cfg.max_length)
 
+    N_train_split = (len(ds_tokens) - N_fit_examples) //2
 
-ds1, f = create_hs_ds(ds_name, dataset_train, rep_control_pipeline2, split_type="train", debug=True, batch_size=batch_size, activations=activations)
-ds1
+    # split the dataset, it's preshuffled
+    dataset_fit = ds_tokens.select(range(N_fit_examples))
+    dataset_train = ds_tokens.select(range(N_fit_examples, N_train_split))
+    dataset_test = ds_tokens.select(range(N_train_split, len(ds_tokens)))
+    assert len(dataset_train)>3, f"dataset_train is too small {len(dataset_train)}"
+    assert len(dataset_test)>3
+
+    ds1, f = create_hs_ds(ds_name, dataset_train, rep_control_pipeline2, split_type="train", debug=True, batch_size=batch_size, activations=activations)
+    clear_mem()
+    ds1, f = create_hs_ds(ds_name, dataset_test, rep_control_pipeline2, split_type="test", debug=True, batch_size=batch_size, activations=activations)
+    clear_mem()
 
 # TODO add qc
 # TODO train and test
