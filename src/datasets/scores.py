@@ -83,3 +83,6 @@ def scores2choice_probs2(logits, choiceids: List[List[int]]):
     probs = torch.softmax(logits, 0)  # shape [tokens, inferences)
     probs_c = torch.tensor([[probs[cc] for cc in c] for c in choiceids]).sum(1)  # sum over alternate choices e.g. [['decrease', 'dec'],['inc', 'increase']]
     return probs_c
+
+def row_choice_ids(r, tokenizer):
+    return choice2ids([c for c in r['answer_choices']], tokenizer)

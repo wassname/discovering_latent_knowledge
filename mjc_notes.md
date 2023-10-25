@@ -1841,3 +1841,9 @@ we need to save cache load
 honesty_rep_reader both directions and signs!
 or activations
 
+
+
+bugs:
+- [ ] why is it sometimes tensors sometimes not
+- [ ] why is it sometimes batched sometimes not
+- [ ] I want to force it into batched preproc, batched forward->postproce yeild single outputs

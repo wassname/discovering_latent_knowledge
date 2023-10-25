@@ -48,7 +48,7 @@ from itertools import chain
 import functools
 from src.prompts.prompt_loading import load_prompts
 from src.datasets.scores import scores2choice_probs
-from src.datasets.scores import choice2id, choice2ids
+from src.datasets.scores import choice2id, choice2ids, row_choice_ids
 from src.datasets.intervene import intervention_meta_fn, get_interventions_dict, InterventionDict
 from src.extraction.config import ExtractConfig
 from src.config import root_folder
@@ -223,62 +223,63 @@ def qc_ds(f):
     print(f)
     
     
-    
-def load_preproc_dataset(ds_name: str, cfg: ExtractConfig, tokenizer: PreTrainedTokenizerBase, split_type:str="train", N=None) -> Dataset:
-    """load a preprocessed dataset of tokens."""
-    # TODO refactor out cfg
-    if N is None:
-        N = cfg.max_examples[split_type!="train"]
-    ds_prompts = Dataset.from_generator(
-        load_prompts,
-        gen_kwargs=dict(
-            ds_string=ds_name,
-            num_shots=cfg.num_shots,
-            split_type=split_type,
-            # template_path=template_path,
-            seed=cfg.seed,
-            prompt_format='llama',
-            N=N*3,
-        ),
-    )
+  
+# def load_preproc_dataset(ds_name: str, cfg: ExtractConfig, tokenizer: PreTrainedTokenizerBase, split_type:str="train", N=None) -> Dataset:
+#     """load a preprocessed dataset of tokens."""
+#     # TODO refactor out cfg
+#     if N is None:
+#         N = cfg.max_examples[split_type!="train"]
+#     ds_prompts = Dataset.from_generator(
+#         load_prompts,
+#         gen_kwargs=dict(
+#             ds_string=ds_name,
+#             num_shots=cfg.num_shots,
+#             split_type=split_type,
+#             # template_path=template_path,
+#             seed=cfg.seed,
+#             prompt_format='llama',
+#             N=N*3,
+#         ),
+#     )
 
-    # ## Format prompts
-    # The prompt is the thing we most often have to change and debug. So we do it explicitly here.
-    # We do it as transforms on a huggingface dataset.
-    # In this case we use multishot examples from train, and use the test set to generated the hidden states dataset. We will test generalisation on a whole new dataset.
+#     # ## Format prompts
+#     # The prompt is the thing we most often have to change and debug. So we do it explicitly here.
+#     # We do it as transforms on a huggingface dataset.
+#     # In this case we use multishot examples from train, and use the test set to generated the hidden states dataset. We will test generalisation on a whole new dataset.
 
-    ds_tokens = (
-        ds_prompts
-        .map(
-            lambda ex: tokenizer(
-                ex["question"], padding="max_length", max_length=cfg.max_length, truncation=True, add_special_tokens=True,
-                return_tensors="np",
-                return_attention_mask=True,
-                # return_overflowing_tokens=True,
-            ),
-            batched=True,
-            desc='tokenize'
-        )
-        .map(lambda r: {"truncated": np.sum(r["attention_mask"], 0)==cfg.max_length}, desc='truncated')
-        .map(
-            lambda r: {"prompt_truncated": tokenizer.batch_decode(r["input_ids"])},
-            batched=True,
-            desc='prompt_truncated',
-        )
-        .map(lambda r: {'choice_ids': row_choice_ids(r, tokenizer)}, desc='choice_ids')
-    )
+#     ds_tokens = (
+#         ds_prompts
+#         .map(
+#             lambda ex: tokenizer(
+#                 ex["question"], padding="max_length", max_length=cfg.max_length, truncation=True, add_special_tokens=True,
+#                 return_tensors="pt",
+#                 return_attention_mask=True,
+#                 # return_overflowing_tokens=True,
+#             ),
+#             batched=True,
+#             desc='tokenize'
+#         )
+#         .map(lambda r: {"truncated": np.sum(r["attention_mask"], 0)==cfg.max_length}, desc='truncated')
+#         .map(
+#             lambda r: {"prompt_truncated": tokenizer.batch_decode(r["input_ids"])},
+#             batched=True,
+#             desc='prompt_truncated',
+#         )
+#         .map(lambda r: {'choice_ids': row_choice_ids(r, tokenizer)}, desc='choice_ids')
+#     )
     
     
+#     ds_tokens = shuffle_dataset_by(ds_tokens, 'example_i')
+#     print('num_rows', ds_tokens.num_rows)
     
+#     # ## Filter out truncated examples
+#     ds_tokens = ds_tokens.filter(lambda r: not r['prompt_truncated'])
+#     print('num_rows', ds_tokens.num_rows)
+#     return ds_tokens
 
-    
-    ds_tokens = shuffle_dataset_by(ds_tokens, 'example_i')
-    print('removed truncated rows to leave: num_rows', ds_tokens.num_rows)
-    return ds_tokens
 
-
-def row_choice_ids(r, tokenizer):
-    return choice2ids([c for c in r['answer_choices']], tokenizer)
+# def row_choice_ids(r, tokenizer):
+#     return choice2ids([c for c in r['answer_choices']], tokenizer)
 
 
 def expand_choices(choices: List[str]) -> Set[str]:

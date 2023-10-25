@@ -21,6 +21,11 @@ import functools
 from elk.extraction.balanced_sampler import BalancedSampler, FewShotSampler
 import pandas as pd
 from loguru import logger
+from src.helpers.ds import shuffle_dataset_by
+from src.datasets.scores import choice2id, choice2ids, row_choice_ids
+from src.extraction.config import ExtractConfig
+from src.models.load import verbose_change_param, AutoConfig, AutoTokenizer, AutoModelForCausalLM, PreTrainedTokenizerBase
+
 
 # Local path to the folder containing the templates
 TEMPLATES_FOLDER_PATH = Path(__file__).parent / "templates"
@@ -102,6 +107,7 @@ def load_prompts(
     ds_dict = assert_type(dict, load_dataset(ds_name, config_name or None))
     split_name = select_split(ds_dict, split_type)
 
+    # TODO:, can I make sure it's the same shuffle regardless of length?
     ds = assert_type(Dataset, ds_dict[split_name].shuffle(seed=seed))
     if world_size > 1:
         ds = ds.shard(world_size, rank)
@@ -289,3 +295,58 @@ def _convert_to_prompts(
         raise ValueError(f'Prompt duplicated {dup_count} times! "{maybe_dup}"')
 
     return prompts
+
+
+
+def load_preproc_dataset(ds_name: str, cfg: ExtractConfig, tokenizer: PreTrainedTokenizerBase, split_type:str="train", N=None) -> Dataset:
+    """load a preprocessed dataset of tokens."""
+    # TODO refactor out cfg
+    if N is None:
+        N = cfg.max_examples[split_type!="train"]
+    ds_prompts = Dataset.from_generator(
+        load_prompts,
+        gen_kwargs=dict(
+            ds_string=ds_name,
+            num_shots=cfg.num_shots,
+            split_type=split_type,
+            # template_path=template_path,
+            seed=cfg.seed,
+            prompt_format='llama',
+            N=N*3,
+        ),
+    )
+
+    # ## Format prompts
+    # The prompt is the thing we most often have to change and debug. So we do it explicitly here.
+    # We do it as transforms on a huggingface dataset.
+    # In this case we use multishot examples from train, and use the test set to generated the hidden states dataset. We will test generalisation on a whole new dataset.
+
+    ds_tokens = (
+        ds_prompts
+        .map(
+            lambda ex: tokenizer(
+                ex["question"], padding="max_length", max_length=cfg.max_length, truncation=True, add_special_tokens=True,
+                return_tensors="pt",
+                return_attention_mask=True,
+                # return_overflowing_tokens=True,
+            ),
+            batched=True,
+            desc='tokenize'
+        )
+        .map(lambda r: {"truncated": np.sum(r["attention_mask"], 0)==cfg.max_length}, desc='truncated')
+        .map(
+            lambda r: {"prompt_truncated": tokenizer.batch_decode(r["input_ids"])},
+            batched=True,
+            desc='prompt_truncated',
+        )
+        .map(lambda r: {'choice_ids': row_choice_ids(r, tokenizer)}, desc='choice_ids')
+    )
+    
+    
+    ds_tokens = shuffle_dataset_by(ds_tokens, 'example_i')
+    print('num_rows', ds_tokens.num_rows)
+    
+    # ## Filter out truncated examples
+    ds_tokens = ds_tokens.filter(lambda r: not r['truncated'])
+    print('num_rows (after filtering out truncated rows)', ds_tokens.num_rows)
+    return ds_tokens
