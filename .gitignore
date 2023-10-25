@@ -3,6 +3,7 @@ lightning_logs/
 .ds/
 /notebooks/old/
 *.pyc
+/data/
 
 # Distribution / packaging
 .Python
@@ -163,3 +164,4 @@ cython_debug/
 *.bin
 
 .DS_Store
+
