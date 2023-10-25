@@ -96,7 +96,7 @@ def load_rep_reader(model, tokenizer, cfg, N_fit_examples=20, batch_size=2, rep_
     intervention_f.parent.mkdir(exist_ok=True, parents=True)
     if not intervention_f.exists():        
         
-        hidden_layers = list(range(8, model.config.num_hidden_layers, 3))
+        hidden_layers = list(range(cfg.layer_padding, model.config.num_hidden_layers, cfg.layer_stride))
         
         dataset_fit = load_preproc_dataset('imdb', cfg, tokenizer, N=N_fit_examples)
         
@@ -144,7 +144,7 @@ hidden_layers
 
 # %%
 # load dataset
-ds_name = 'imdb'
+ds_name = cfg.datasets[0]
 ds_tokens = load_preproc_dataset(ds_name, tokenizer, N=sum(cfg.max_examples), seed=cfg.seed, num_shots=cfg.num_shots, max_length=cfg.max_length)
 
 N_train_split = (len(ds_tokens) - N_fit_examples) //2
@@ -153,7 +153,8 @@ N_train_split = (len(ds_tokens) - N_fit_examples) //2
 dataset_fit = ds_tokens.select(range(N_fit_examples))
 dataset_train = ds_tokens.select(range(N_fit_examples, N_train_split))
 dataset_test = ds_tokens.select(range(N_train_split, len(ds_tokens)))
-dataset_test
+assert len(dataset_train)>3, f"dataset_train is too small {len(dataset_train)}"
+assert len(dataset_test)>3
 
 
 
@@ -239,6 +240,7 @@ if TEST:
 
 # %%
 # test intervention quality
+# TODO perhaps move this to intervention create/load/cache
 if TEST:
     model.eval()
     with torch.no_grad():
@@ -295,7 +297,7 @@ def create_hs_ds(ds_name, ds_tokens, pipeline, activations=None, f = None, batch
 
 
 
-ds1, f = create_hs_ds('imdb', dataset_train, rep_control_pipeline2, split_type="train", debug=True, batch_size=batch_size)
+ds1, f = create_hs_ds(ds_name, dataset_train, rep_control_pipeline2, split_type="train", debug=True, batch_size=batch_size, activations=activations)
 ds1
 
 # TODO add qc

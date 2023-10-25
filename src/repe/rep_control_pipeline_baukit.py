@@ -71,19 +71,35 @@ class RepControlPipeline2(FeatureExtractionPipeline):
 
     def __call__(self, model_inputs, activations=None, **kwargs):
         with torch.no_grad():
-            if activations is not None:
-                activations_i = Activations({self.layer_name_tmpl.format(k):v for k,v in activations.items()})
+            if activations is not None:                
                 layers_names = [self.layer_name_tmpl.format(i) for i in activations.keys()]
-                edit_fn = partial(intervention_meta_fn2, activations=activations_i)
+                
+                # make intervention functions
+                activations_pos_i = Activations({self.layer_name_tmpl.format(k):v for k,v in activations.items()})
+                activations_neg_i = Activations({self.layer_name_tmpl.format(k):-v for k,v in activations.items()})
+                
+                edit_fn = partial(intervention_meta_fn2, activations=activations_pos_i)
                 with TraceDict(
                     self.model, layers_names, detach=True, edit_output=edit_fn
                 ) as ret:
-                    outputs = super().__call__(model_inputs, **kwargs)
+                    outputs_pos = super().__call__(model_inputs, **kwargs)
+                    
+                edit_fn2 = partial(intervention_meta_fn2, activations=activations_neg_i)
+                with TraceDict(
+                    self.model, layers_names, detach=True, edit_output=edit_fn2
+                ) as ret:
+                    outputs_neg = super().__call__(model_inputs, **kwargs)
+                    
+                outputs = super().__call__(model_inputs, **kwargs)
+                
+                # TODO stack the hidden states, and scores
+                pass
+                
             else:
                 outputs = super().__call__(model_inputs, **kwargs)
         return outputs
     
-    def preprocess(self, inputs: Dataset, **tokenize_kwargs) -> Dict[str, GenericTensor]:
+    def preprocess(self, inputs: dict, **tokenize_kwargs) -> Dict[str, GenericTensor]:
         # tokenize a batch of inputs
         return_tensors = self.framework
         
@@ -101,12 +117,12 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         inputs["attention_mask"] = torch.tensor(inputs['attention_mask'], dtype=torch.bool, device=self.model.device)
         return inputs
 
-    def _forward(self, inputs):
+    def _forward(self, inputs) -> ModelOutput:
         
         assert inputs['input_ids'].ndim == 2, f"expected input_ids to be (batch, seq), got {inputs['input_ids'].shape}"
         
         self.model.eval()
-        model_inputs = dict(
+        model_in = dict(
             input_ids=inputs['input_ids'],
             attention_mask=inputs['attention_mask'],
             use_cache=False,
@@ -114,18 +130,16 @@ class RepControlPipeline2(FeatureExtractionPipeline):
             return_dict=True
         )
         with torch.no_grad():
-            model_outputs = self.model(**model_inputs)
+            o = self.model(**model_in)
         
         # hidden states come at as lists of layers, lets concat them
-        model_outputs['hidden_states'] = rearrange(list(model_outputs['hidden_states']), 'l b t h -> b l t h')
-        model_outputs['last_hidden_states'] = model_outputs['hidden_states'][:, -1]
+        o['hidden_states'] = rearrange(list(o['hidden_states']), 'l b t h -> b l t h')
         
         # batch of outputs and inputs. retain some of the inputs
-        model_outputs = hacky_sanitize_outputs(model_outputs)
-        inputs = hacky_sanitize_outputs(inputs)
-        return ModelOutput(**model_outputs, **inputs)
+        return ModelOutput(**o, **inputs)
 
-    def postprocess(self, o):
+    def postprocess(self, o: ModelOutput):
+        o = hacky_sanitize_outputs(o)
         # note this sometimes deals with a batch, sometimes with a single result. infuriating
         res = []
         for i in range(len(o['input_ids'])):
@@ -138,10 +152,11 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         else:
             return res
         
-    def postprocess_single(self, o):
+    def postprocess_single(self, o: dict) -> dict:
         assert isinstance(o, dict) and o['logits'].ndim==2, f"expected dict with logits of shape (seq, vocab), got {o['logits'].shape}"
         # assert o['logits'].shape[0]==1, f"postprocess expected batch size 1, got {o['logits'].shape[0]}"
         # This is called once for each result, but the text pipeline is set up to hande multiple...
+        o['last_hidden_states'] = o['hidden_states'][:, -1]
         
         o["end_logits"] = o["logits"][-1, :].float()
         

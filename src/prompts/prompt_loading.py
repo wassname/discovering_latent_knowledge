@@ -346,4 +346,5 @@ def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int
     # ## Filter out truncated examples
     ds_tokens = ds_tokens.filter(lambda r: not r['truncated'])
     print('num_rows (after filtering out truncated rows)', ds_tokens.num_rows)
+    assert len(ds_tokens), f'No examples left after filtering out truncated rows, try a longer max_length than {max_length}'
     return ds_tokens
