@@ -14,16 +14,17 @@ import pandas as pd
 from matplotlib import pyplot as plt
 plt.style.use('ggplot')
 
-import os
+import os, psutil
+max_dataset_memory = f"{psutil.virtual_memory().total //2}"
+os.environ["HF_DATASETS_IN_MEMORY_MAX_SIZE"] = max_dataset_memory
+
 from pathlib import Path
 from tqdm.auto import tqdm
 from loguru import logger
-logger.add(os.sys.stderr, format="{time} {level} {message}", level="INFO")
+# logger.add(os.sys.stderr, format="{time} {level} {message}", level="INFO")
+logger.add("logs/make_dataset_{time}.log")
 
 from typing import Optional, List, Dict, Union, Tuple, Callable, Iterable
-
-
-# %%
 
 
 import torch
@@ -32,7 +33,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch import optim
 from torch.utils.data import random_split, DataLoader, TensorDataset
-
+from simple_parsing import ArgumentParser
 import transformers
 from transformers import AutoTokenizer, pipeline, AutoModelForCausalLM
 from src.repe import repe_pipeline_registry
@@ -42,38 +43,32 @@ from src.models.load import load_model
 from src.extraction.config import ExtractConfig
 from src.prompts.prompt_loading import load_preproc_dataset
 
+import json
+# from datasets import Dataset, DatasetInfo
+import datasets
+from src.config import root_folder
+from pathvalidate import sanitize_filename
+from src.helpers.ds import ds_keep_cols
+
 # from sklearn.linear_model import LogisticRegression
 # from sklearn.metrics import f1_score, roc_auc_score, accuracy_score
 # from sklearn.preprocessing import RobustScaler
 
 
 # %%
-# model_name_or_path = "TheBloke/Wizard-Vicuna-30B-Uncensored-GPTQ"
-# model_name_or_path = "TheBloke/Mistral-7B-Instruct-v0.1-GPTQ"
-model_name_or_path = "TheBloke/WizardCoder-Python-13B-V1.0-GPTQ"
 
 TEST = False
 batch_size = 2
 
-cfg = ExtractConfig(max_examples=(200, 200), model=model_name_or_path, max_length=666)
+parser = ArgumentParser(add_help=False)
+parser.add_arguments(ExtractConfig, dest="run")
+args = parser.parse_args()
+cfg = args.run
+    
+# cfg = ExtractConfig(max_examples=(200, 200), model=model_name_or_path, max_length=666)
 print(cfg)
 
-model, tokenizer = load_model(model_name_or_path)
-
-
-# %%
-
-
-# hidden_layers = list(range(-1, -model.config.num_hidden_layers, -1))
-# hidden_layers = [f"model.layers.{i}" for i in range(8, model.config.num_hidden_layers, 3)]
-# hidden_layers = list(range(8, model.config.num_hidden_layers, 3))
-# hidden_layers
-
-
-
-# rep_reading_pipeline =  pipeline("rep-reading", model=model, tokenizer=tokenizer)
-# rep_reading_pipeline
-# hidden_layers
+model, tokenizer = load_model(cfg.model)
 
 
 # %%
@@ -160,8 +155,6 @@ dataset_train = ds_tokens.select(range(N_fit_examples, N_train_split))
 dataset_test = ds_tokens.select(range(N_train_split, len(ds_tokens)))
 dataset_test
 
-
-# %%
 
 
 # %% [markdown]
@@ -260,14 +253,6 @@ if TEST:
 # %%
 
 
-# %%
-import json
-# from datasets import Dataset, DatasetInfo
-import datasets
-from src.config import root_folder
-from pathvalidate import sanitize_filename
-from src.helpers.ds import ds_keep_cols
-
 def create_hs_ds(ds_name, ds_tokens, pipeline, activations=None, f = None, batch_size=2, split_type="train", debug=TEST):
     "create a dataset of hidden states."""
     
@@ -312,6 +297,10 @@ def create_hs_ds(ds_name, ds_tokens, pipeline, activations=None, f = None, batch
 
 ds1, f = create_hs_ds('imdb', dataset_train, rep_control_pipeline2, split_type="train", debug=True, batch_size=batch_size)
 ds1
+
+# TODO add qc
+# TODO train and test
+# TODO all 3 interventions (probobly add to pipeline, and add a third dimension to the results)
 
 
 # %% [markdown]
