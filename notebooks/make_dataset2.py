@@ -99,9 +99,9 @@ def load_rep_reader(model, tokenizer, cfg, N_fit_examples=20, batch_size=2, rep_
         
         hidden_layers = list(range(cfg.layer_padding, model.config.num_hidden_layers, cfg.layer_stride))
         
-        dataset_fit = load_preproc_dataset('imdb', cfg, tokenizer, N=N_fit_examples)
+        dataset_fit = load_preproc_dataset('imdb', tokenizer, N=N_fit_examples, seed=cfg.seed, num_shots=cfg.num_shots, max_length=cfg.max_length)
         
-        rep_reading_pipeline =  pipeline("rep-reading", model=model, tokenizer=tokenizer)
+        rep_reading_pipeline = pipeline("rep-reading", model=model, tokenizer=tokenizer)
         honesty_rep_reader = rep_reading_pipeline.get_directions(
             dataset_fit['question'], 
             rep_token=rep_token, 
@@ -145,28 +145,6 @@ hidden_layers
 # %% [markdown]
 # # Control helpers
 
-# %%
-def metrics(control_outputs_neg, baseline_outputs, control_outputs):
-    signs = [-1, 0, 1]
-    for i in range(len(baseline_outputs)):
-        ranked = []
-        
-        for j, r in enumerate([control_outputs_neg, baseline_outputs, control_outputs]):        
-            choices = r[i]['answer_choices']
-            label = r[i]['label_true']
-            ans = r[i]['ans']
-            sign = signs[j]
-            ranked.append(ans)
-            choice_true = choices[label]
-            if label==0:
-                ans *= -1            
-            print(f"==== Control ({signs[j]}) ====")
-            print(f"Score: {ans:02.2%} of true ans `{choice_true}`")
-            # print(f"Text ans: {r['text_ans'][i]}") 
-        
-        is_ranked = (np.argsort(ranked)==np.arange(3)).all()
-        print(f"Ranked? {is_ranked} {ranked}")
-        print()
 
 
 
@@ -194,13 +172,33 @@ for layer in hidden_layers:
     activations[layer] = torch.tensor(coeff * honesty_rep_reader.directions[layer] * honesty_rep_reader.direction_signs[layer]).to(model.device).half()
     
 
+# %%
+def metrics(control_outputs_neg, baseline_outputs, control_outputs):
+    signs = [-1, 0, 1]
+    for i in range(len(baseline_outputs)):
+        ranked = []
+        
+        for j, r in enumerate([control_outputs_neg, baseline_outputs, control_outputs]):        
+            choices = r[i]['answer_choices']
+            label = r[i]['label_true']
+            ans = r[i]['ans']
+            sign = signs[j]
+            ranked.append(ans)
+            choice_true = choices[label]
+            if label==0:
+                ans *= -1            
+            print(f"==== Control ({signs[j]}) ====")
+            print(f"Score: {ans:02.2%} of true ans `{choice_true}`")
+            # print(f"Text ans: {r['text_ans'][i]}") 
+        
+        is_ranked = (np.argsort(ranked)==np.arange(3)).all()
+        print(f"Ranked? {is_ranked} {ranked}")
+        print()
 
 
 
 # %%
 if TEST:
-    inputs = dataset_train[:3]
-
     # unit test: with multiple input types: single, list, generator, dataset
     ## single
     input_types = {'single':dataset_train[0], 'list':[dataset_train[i] for i in range(3)], 'generator':iter(dataset_train.select(range(3))), 'dataset':dataset_train.select(range(3)).to_iterable_dataset()}
@@ -221,17 +219,21 @@ if TEST:
 # %%
 # test intervention quality
 # TODO perhaps move this to intervention create/load/cache
-if TEST:
-    activations_neg = {k:-v for k,v in activations.items()}
+def test_intervention_quality(dataset_train):
+    inputs = dataset_train[:3]
+    activations_neg = {k:-v for k, v in activations.items()}
+    activations_none = {k:v*0 for k, v in activations.items()}
     model.eval()
     with torch.no_grad():
-        baseline_outputs = rep_control_pipeline2(inputs, batch_size=batch_size)
+        baseline_outputs = rep_control_pipeline2(inputs, batch_size=batch_size, activations=activations_none)
         control_outputs = rep_control_pipeline2(inputs, activations=activations, batch_size=batch_size)
         control_outputs_neg = rep_control_pipeline2(inputs, activations=activations_neg, batch_size=batch_size)
 
 
     metrics(control_outputs_neg, baseline_outputs, control_outputs)
 
+if TEST:
+    test_intervention_quality(dataset_train)
 
 # %%
 
@@ -242,6 +244,7 @@ def create_hs_ds(ds_name, ds_tokens, pipeline, activations=None, f = None, batch
     N = len(ds_tokens)
     dataset_name = sanitize_filename(f"{cfg.model}_{ds_name}_{split_type}_{N}", replacement_text="_")
     f = str(root_folder / '.ds'/ f"{dataset_name}")
+    logger.info(f"Creating dataset {dataset_name} with {len(ds_tokens)} examples at `{f}`")
     
     info_kwargs = dict(extract_cfg=cfg.to_dict(), ds_name=ds_name, split_type=split_type, f=f, date=pd.Timestamp.now().isoformat(),)
     
@@ -281,7 +284,8 @@ for ds_name in cfg.datasets:
     
     # load dataset
     ds_name = cfg.datasets[0]
-    ds_tokens = load_preproc_dataset(ds_name, tokenizer, N=sum(cfg.max_examples), seed=cfg.seed, num_shots=cfg.num_shots, max_length=cfg.max_length)
+    N=sum(cfg.max_examples)
+    ds_tokens = load_preproc_dataset(ds_name, tokenizer, N=N, seed=cfg.seed, num_shots=cfg.num_shots, max_length=cfg.max_length)
 
     N_train_split = (len(ds_tokens) - N_fit_examples) //2
 
@@ -291,6 +295,9 @@ for ds_name in cfg.datasets:
     dataset_test = ds_tokens.select(range(N_train_split, len(ds_tokens)))
     assert len(dataset_train)>3, f"dataset_train is too small {len(dataset_train)}"
     assert len(dataset_test)>3
+    
+    # FIXME:
+    # test_intervention_quality(dataset_train)
 
     ds1, f = create_hs_ds(ds_name, dataset_train, rep_control_pipeline2, split_type="train", debug=True, batch_size=batch_size, activations=activations)
     clear_mem()

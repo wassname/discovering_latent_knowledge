@@ -173,7 +173,7 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         o["input_truncated"] = self.tokenizer.decode(input_ids)
         
         o["truncated"] = torch.tensor(o["attention_mask"]).sum()==self.max_length
-        o["text_ans"] = self.tokenizer.decode(o["end_logits"].argmax(-1))
+        o["text_ans"] = self.tokenizer.decode(o["end_logits"].softmax(0).argmax(0))
         
         if 'answer_choices' in o:
             answer_choices = o['answer_choices']
