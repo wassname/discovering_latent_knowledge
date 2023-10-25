@@ -11,6 +11,7 @@ from typing import List, Tuple, Dict, Any, Union, NewType
 from baukit.nethook import Trace, TraceDict, recursive_copy
 from functools import partial
 from einops import rearrange
+from transformers.modeling_outputs import ModelOutput
 from src.datasets.scores import choice2ids, default_class2choices, scores2choice_probs2
 # from src.datasets.scores import scores2choice_probs
 from src.helpers.torch import clear_mem, detachcpu
@@ -86,7 +87,7 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         # tokenize a batch of inputs
         return_tensors = self.framework
         
-        # if the pipeline is in "single mode", turn it into a batch
+        # if the pipeline is in "single mode or "generator mode" it gets singles, which we turn into a batch. In generator mode the batches of single items will get concatenated fine
         if isinstance(inputs['question'], str):
             inputs = {k: [v] for k, v in inputs.items()}
             
@@ -122,16 +123,22 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         model_outputs['hidden_states'] = rearrange(list(model_outputs['hidden_states']), 'l b t h -> b l t h')
         
         # batch of outputs and inputs. retain some of the inputs
-        model_outputs = {**model_inputs, **model_outputs}
-        return hacky_sanitize_outputs(model_outputs)
+        model_outputs = hacky_sanitize_outputs(model_outputs)
+        model_inputs = hacky_sanitize_outputs(model_inputs)
+        return ModelOutput(**model_outputs, **model_inputs)
 
     def postprocess(self, o):
         # note this sometimes deals with a batch, sometimes with a single result. infuriating
-        # TODO loop through results and yeild them one at a time
+        res = []
         for i in range(len(o['input_ids'])):
             o_i = {k: v[i] for k, v in o.items()}
-            o_i = self.postprocess1(o_i)
-            yield o_i
+            res.append(self.postprocess1(o_i))
+            
+        # it seems to expect us to squeeze single results
+        if len(res)==1:
+            return res[0]
+        else:
+            return res
         
     def postprocess1(self, o):
         assert isinstance(o, dict) and o['logits'].ndim==2, f"expected dict with logits of shape (seq, vocab), got {o['logits'].shape}"
