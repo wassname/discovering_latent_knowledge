@@ -101,38 +101,36 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         inputs["attention_mask"] = torch.tensor(inputs['attention_mask'], dtype=torch.bool, device=self.model.device)
         return inputs
 
-    def _forward(self, model_inputs):
+    def _forward(self, inputs):
         
-        assert model_inputs['input_ids'].ndim == 2, f"expected input_ids to be (batch, seq), got {model_inputs['input_ids'].shape}"
+        assert inputs['input_ids'].ndim == 2, f"expected input_ids to be (batch, seq), got {inputs['input_ids'].shape}"
         
         self.model.eval()
-        inputs = dict(
-            input_ids=model_inputs['input_ids'],
-            attention_mask=model_inputs['attention_mask'],
+        model_inputs = dict(
+            input_ids=inputs['input_ids'],
+            attention_mask=inputs['attention_mask'],
             use_cache=False,
             output_hidden_states=True,
             return_dict=True
         )
         with torch.no_grad():
-            model_outputs = self.model(**inputs)
-        # o = {k: detachcpu(v) for k, v in o.items()}
-        # o = recursive_copy(o)
-        # clear_mem()
+            model_outputs = self.model(**model_inputs)
         
         # hidden states come at as lists of layers, lets concat them
         model_outputs['hidden_states'] = rearrange(list(model_outputs['hidden_states']), 'l b t h -> b l t h')
+        model_outputs['last_hidden_states'] = model_outputs['hidden_states'][:, -1]
         
         # batch of outputs and inputs. retain some of the inputs
         model_outputs = hacky_sanitize_outputs(model_outputs)
-        model_inputs = hacky_sanitize_outputs(model_inputs)
-        return ModelOutput(**model_outputs, **model_inputs)
+        inputs = hacky_sanitize_outputs(inputs)
+        return ModelOutput(**model_outputs, **inputs)
 
     def postprocess(self, o):
         # note this sometimes deals with a batch, sometimes with a single result. infuriating
         res = []
         for i in range(len(o['input_ids'])):
             o_i = {k: v[i] for k, v in o.items()}
-            res.append(self.postprocess1(o_i))
+            res.append(self.postprocess_single(o_i))
             
         # it seems to expect us to squeeze single results
         if len(res)==1:
@@ -140,12 +138,10 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         else:
             return res
         
-    def postprocess1(self, o):
+    def postprocess_single(self, o):
         assert isinstance(o, dict) and o['logits'].ndim==2, f"expected dict with logits of shape (seq, vocab), got {o['logits'].shape}"
         # assert o['logits'].shape[0]==1, f"postprocess expected batch size 1, got {o['logits'].shape[0]}"
         # This is called once for each result, but the text pipeline is set up to hande multiple...
-        
-        # TODO for k in ks: o[k] = o[k].squeeze(0)
         
         o["end_logits"] = o["logits"][-1, :].float()
         
@@ -157,18 +153,21 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         
         if 'answer_choices' in o:
             answer_choices = o['answer_choices']
-            # if isinstance(answer_choices[0][0], str):
-                # answer_choices = [answer_choices]
         else:
-            answer_choices = default_class2choices # self.default_class2choiceids
+            answer_choices = default_class2choices
         
         o['choice_ids'] = row_choice_ids(answer_choices, self.tokenizer)
         
         p = o['add_ans'] = scores2choice_probs2(o['end_logits'], o['choice_ids']) 
         o['ans'] = p[1] / (torch.sum(p) + 1e-5)
         
-        o = hacky_sanitize_outputs(o)
+        
+        # lets delete all the large arrays we don't need. We don't need anything with 3 dims, as we only need the things from the last token
+        for k in ['input_ids', 'attention_mask', 'logits', 'hidden_states']:
+            del o[k]
         
         # ah to make a dataset we need to return one at a time, right now it's Dict[str, Batch]. e.g. hiddenstates={layer_1:[2, 555, 5120]....
+        o = hacky_sanitize_outputs(o)
+        # {k:v.shape for k,v in o.items() if hasattr(v, 'shape')}
         return o
 

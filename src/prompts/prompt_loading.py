@@ -241,7 +241,7 @@ def _convert_to_prompts(
         
         # skip prompts where the responses are similar in the first token
         if answer_choices[0][:3]==answer_choices[1][:3]:
-            logger.debug(f"skipping prompt because it's answers are not unique (for the first token): {template.name} {answer_choices}")
+            logger.trace(f"skipping prompt because it's answers are not unique (for the first token): {template.name} {answer_choices}")
             continue
         answer_choices = [[c] for c in answer_choices]
         for instructed_to_lie in [False, True]:
@@ -298,7 +298,7 @@ def _convert_to_prompts(
 
 
 
-def load_preproc_dataset(ds_name: str, N, tokenizer: PreTrainedTokenizerBase, split_type:str="train", seed=42, num_shots=1) -> Dataset:
+def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int, split_type:str="train", seed=42, num_shots=1, max_length=999) -> Dataset:
     """load a preprocessed dataset of tokens."""
     ds_prompts = Dataset.from_generator(
         load_prompts,
@@ -322,7 +322,7 @@ def load_preproc_dataset(ds_name: str, N, tokenizer: PreTrainedTokenizerBase, sp
         ds_prompts
         .map(
             lambda ex: tokenizer(
-                ex["question"], padding="max_length", max_length=cfg.max_length, truncation=True, add_special_tokens=True,
+                ex["question"], padding="max_length", max_length=max_length, truncation=True, add_special_tokens=True,
                 return_tensors="pt",
                 return_attention_mask=True,
                 # return_overflowing_tokens=True,
@@ -330,7 +330,7 @@ def load_preproc_dataset(ds_name: str, N, tokenizer: PreTrainedTokenizerBase, sp
             batched=True,
             desc='tokenize'
         )
-        .map(lambda r: {"truncated": np.sum(r["attention_mask"], 0)==cfg.max_length}, desc='truncated')
+        .map(lambda r: {"truncated": np.sum(r["attention_mask"], 0)==max_length}, desc='truncated')
         .map(
             lambda r: {"prompt_truncated": tokenizer.batch_decode(r["input_ids"])},
             batched=True,
