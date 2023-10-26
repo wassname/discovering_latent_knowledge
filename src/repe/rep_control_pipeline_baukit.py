@@ -18,6 +18,10 @@ from src.helpers.torch import clear_mem, detachcpu
 
 Activations = NewType("Activations", Dict[str, torch.Tensor])
 
+def try_half(v):
+    if isinstance(v, torch.Tensor):
+        return v.half()
+    return v
 
 def hacky_sanitize_outputs(o):
     """I can't find the mem leak, so lets just detach, cpu, clone, freemem."""
@@ -152,7 +156,7 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         return ModelOutput(**o, **inputs)
 
     def postprocess(self, o: ModelOutput):
-        o = hacky_sanitize_outputs(o)
+        # o = hacky_sanitize_outputs(o)
         # note this sometimes deals with a batch, sometimes with a single result. infuriating
         res = []
         for i in range(len(o['input_ids'])):
@@ -173,7 +177,7 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         o["input_truncated"] = self.tokenizer.decode(input_ids)
         
         o["truncated"] = torch.tensor(o["attention_mask"]).sum()==self.max_length
-        o["text_ans"] = self.tokenizer.decode(o["end_logits"].softmax(0).argmax(0))
+        o["text_ans"] = self.tokenizer.batch_decode(o["end_logits"].softmax(0).argmax(0))
         
         if 'answer_choices' in o:
             answer_choices = o['answer_choices']
@@ -183,7 +187,7 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         o['choice_ids'] = row_choice_ids(answer_choices, self.tokenizer)
         
         ii = o['end_logits'].shape[1]
-        p = o['add_ans'] = torch.stack([scores2choice_probs2(o['end_logits'][:, i], o['choice_ids']) for i in range(ii)], 1)
+        p = o['choice_probs'] = torch.stack([scores2choice_probs2(o['end_logits'][:, i], o['choice_ids']) for i in range(ii)], 1)
         o['ans'] = p[1] / (torch.sum(p, 0) + 1e-5)
         
         
@@ -192,8 +196,15 @@ class RepControlPipeline2(FeatureExtractionPipeline):
             if k in o:
                 del o[k]
         
-        # ah to make a dataset we need to return one at a time, right now it's Dict[str, Batch]. e.g. hiddenstates={layer_1:[2, 555, 5120]....
+        # stop memory leaks?
         o = hacky_sanitize_outputs(o)
+        
+        # # make large arrays smaller
+        # for k in o:
+        #     v = o[k]
+        #     if hasattr(v, 'shape') and v.dtype==torch.float32:
+        #         o[k] = v.half()
         # {k:v.shape for k,v in o.items() if hasattr(v, 'shape')}
+        # {k:v.dtype for k,v in o.items() if hasattr(v, 'shape')}
         return o
 

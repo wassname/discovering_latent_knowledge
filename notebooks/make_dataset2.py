@@ -8,7 +8,8 @@
 # %load_ext autoreload
 # %autoreload 2
 
-
+from src.datasets.features import get_features
+from src.helpers.torch import clear_mem
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
@@ -264,6 +265,7 @@ def create_hs_ds(ds_name, ds_tokens, pipeline, activations=None, f = None, batch
         # this allow us to debug in a single thread
         pipeline(**gen_kwargs)
     
+    dataset_features = get_features(cfg, model.config)
     ds1 = datasets.Dataset.from_generator(
         generator=pipeline,
         info=datasets.DatasetInfo(
@@ -271,14 +273,15 @@ def create_hs_ds(ds_name, ds_tokens, pipeline, activations=None, f = None, batch
             config_name=f,
         ),
         gen_kwargs=gen_kwargs,
+        features=dataset_features,
         num_proc=1,
+        # split=split_type,
     )
     logger.info(f"Created dataset {dataset_name} with {len(ds1)} examples at `{f}`")
     ds1.save_to_disk(f)
     return ds1, f
 
 
-from src.helpers.torch import clear_mem
 
 for ds_name in cfg.datasets:
     
@@ -288,6 +291,8 @@ for ds_name in cfg.datasets:
     ds_tokens = load_preproc_dataset(ds_name, tokenizer, N=N, seed=cfg.seed, num_shots=cfg.num_shots, max_length=cfg.max_length)
 
     N_train_split = (len(ds_tokens) - N_fit_examples) //2
+    
+    N_train_split = cfg.max_examples[0]
 
     # split the dataset, it's preshuffled
     dataset_fit = ds_tokens.select(range(N_fit_examples))

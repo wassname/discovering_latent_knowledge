@@ -12,6 +12,7 @@ from loguru import logger
 from typing import Tuple
 
 def verbose_change_param(tokenizer, path, after):
+    
     before = getattr(tokenizer, path)
     if before!=after:
         setattr(tokenizer, path, after)
@@ -22,6 +23,7 @@ def verbose_change_param(tokenizer, path, after):
 def load_model(model_repo = "TheBloke/WizardCoder-Python-13B-V1.0-GPTQ") -> Tuple[AutoModelForCausalLM, PreTrainedTokenizerBase]:
     """
     A uncensored and large coding ones might be best for lying.
+    
     """
     # see https://github.com/deep-diver/LLM-As-Chatbot/blob/main/models/starchat.py
     # gptq_config = GPTQConfig(bits=4, dataset="c4", disable_exllama=False)

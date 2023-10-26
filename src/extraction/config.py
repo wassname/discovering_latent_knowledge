@@ -18,7 +18,7 @@ class ExtractConfig(Serializable):
     # int4: bool = True
     # """Whether to perform inference in mixed int8 precision with `bitsandbytes`."""
 
-    max_examples: tuple[int, int] = (600, 600)
+    max_examples: tuple[int, int] = (80, 80)
     """Maximum number of examples to use from each split of the dataset."""
 
     num_shots: int = 1
@@ -47,5 +47,5 @@ class ExtractConfig(Serializable):
     template_path: str | None = None
     """Path to pass into `DatasetTemplates`. By default we use the dataset name."""
     
-    max_length: int | None = 700
+    max_length: int | None = 666
     """Maximum length of the input sequence passed to the tokenize encoder function"""

@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 import lightning as pl
 import pandas as pd
 from torch.utils.data import DataLoader, TensorDataset
@@ -17,13 +18,14 @@ from src.helpers import bool2switch, switch2bool
 #     distance = (df.ans1-df.ans0) * true_switch_sign
 #     return distance
 
-to_tensor = lambda x: torch.from_numpy(x).float()
+to_tensor = lambda x: x # torch.from_numpy(x).float()
 to_ds = lambda hs0, hs1, y: TensorDataset(to_tensor(hs0), to_tensor(hs1), to_tensor(y))
 
 
 
 
 class imdbHSDataModule(pl.LightningDataModule):
+    
 
     def __init__(self,
                  ds: Dataset,
@@ -41,25 +43,28 @@ class imdbHSDataModule(pl.LightningDataModule):
         # extract data set into N-Dim tensors and 1-d dataframe
         self.ds_hs = (
             self.ds.select_columns(self.x_cols)
-            .with_format("numpy")
         )
         df = self.df = ds2df(self.ds)
         switch = bool2switch(df['label_true']).values
         
         # probs_c = self.ds['ans']
         self.ans = self.ds['ans'] #probs_c[:, 1] / (np.sum(probs_c, 1) + 1e-5)
-        # df['y'] = df['label_true'].values[:, None] == (self.ans > 0.5)
+        # df['y'] = df['label_true'].values[:, None] == (self.ans > 0.5)       
         
         
-        # how true the answer was. Let's just flip the confidence
-        self.prob_on_truth = switch[:, None] * self.ans
+        # take the llm prob towards the positive answer, and flip it if negative was true
+        # giving us the llm's assigned prob toward the true answer
+        self.prob_on_truth = torch.tensor(switch[:, None] * self.ans)
         
         b = len(self.ds_hs)
-        hs = self.ds_hs['end_hidden_states']
+        # take the diff between layers. Shape batch, layers, hidden_states, inferences
+        hs = torch.tensor(self.ds_hs['end_hidden_states'])
+        hs = hs.diff(1, axis=1)
         self.hs0 = hs[..., 0]
         self.hs1 = hs[..., 1]
         
         # so we are trying to predict is one hidden state is more true than the other
+        # or specifically the distance and direction on the truth axis
         self.y = self.prob_on_truth[:, 1] - self.prob_on_truth[:, 0]
         df['y'] = self.y>0
         
