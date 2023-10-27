@@ -327,7 +327,7 @@ def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int
         try:
             q = tokenizer.apply_chat_template(messages, tokenize=False)
         except Exception, TemplateError as e:
-            if 'Conversational roles' in e.message:
+            if 'Conversation roles must alternate user/assistant/user/assistant/...' in e.message:
                 system = messages[0]['content']
                 q = tokenizer.apply_chat_template(messages[1:], tokenize=False)
                 q = system + q
