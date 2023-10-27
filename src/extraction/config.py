@@ -9,7 +9,11 @@ class ExtractConfig(Serializable):
     datasets: tuple[str, ...] = ("amazon_polarity",  "super_glue:boolq", "glue:qnli", "imdb")
     """Names of HF datasets to use, e.g. `"super_glue:boolq"` or `"imdb"` `"glue:qnli"""
     
-    model: str = "TheBloke/WizardCoder-Python-13B-V1.0-GPTQ"
+    # model: str = "TheBloke/WizardCoder-Python-13B-V1.0-GPTQ"
+    # model: str = "TheBloke/Wizard-Vicuna-13B-Uncensored-GPTQ"
+    # model: str = "TheBloke/Wizard-Vicuna-7B-Uncensored-GPTQ"
+    model: str = "TheBloke/Mistral-7B-Instruct-v0.1-GPTQ"
+    # model: str = "TheBloke/Llama-2-13B-chat-GPTQ"
     """HF model string identifying the language model to extract hidden states from."""
 
     data_dirs: tuple[str, ...] = ()
@@ -18,7 +22,7 @@ class ExtractConfig(Serializable):
     # int4: bool = True
     # """Whether to perform inference in mixed int8 precision with `bitsandbytes`."""
 
-    max_examples: tuple[int, int] = (80, 80)
+    max_examples: tuple[int, int] = (100, 100)
     """Maximum number of examples to use from each split of the dataset."""
 
     num_shots: int = 1

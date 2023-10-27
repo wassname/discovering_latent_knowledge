@@ -1847,3 +1847,15 @@ bugs:
 - [ ] why is it sometimes tensors sometimes not
 - [ ] why is it sometimes batched sometimes not
 - [ ] I want to force it into batched preproc, batched forward->postproce yeild single outputs
+
+# 2023-10-26 20:27:30
+
+Got it working with coder... poor results :(Trying with m
+
+istral istaea, because maybe I need a chat not a code model. It is uncensored!
+
+- [ ] I have poor choice coverag however
+maybe I should just use the huggingface chat template? https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1 
+
+
+- [ ] Also I may be intervening to much, as I get nonsensicle answers. I need to add the intervention QC!

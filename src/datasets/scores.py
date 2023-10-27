@@ -47,17 +47,22 @@ def choice2id(tokenizer, c: str, whitespace_first=False) -> List[int]:
     # HACK: this whole function is messy, and specific to the llama tokenizer :(. I don't want it to fail silently, so I'm adding a few asserts. It's better to find out before 4 hours of data collection
     
     # Note some tokenizers differentiate between "yes", "\nyes" and " yes", and ideally we want all! 
-    ids = [
+    ids2 = [
         tokenizer(f' {c}', add_special_tokens=False)["input_ids"][1],
         tokenizer(f'\n{c}', add_special_tokens=False)["input_ids"][2],
         tokenizer(f'{c}', add_special_tokens=False)["input_ids"][0],
     ]
-    ids = list(set(ids))
+    ids = list(set(ids2))
+    
+    # only include ones that decode to our original
+    ids = [i for i in ids2 if c.startswith(tokenizer.decode(i)) and len(tokenizer.decode(i))]
+    assert len(ids)
     
     # QC: they should all decode to the same token
     decoded_ids = tokenizer.batch_decode(ids)
     shortest = sorted(decoded_ids, key=lambda s:len(s))[0]
-    assert all([decoded_ids[i].startswith(shortest) for i in range(len(decoded_ids))]), f"decoded_ids={decoded_ids}"    
+    assert len(shortest)
+    assert all([decoded_ids[i].startswith(shortest) for i in range(len(decoded_ids))]), f"decoded_ids={decoded_ids}"
     
     # check that we can decode it
     c3 = tokenizer.batch_decode(ids)

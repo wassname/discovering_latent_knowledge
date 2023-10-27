@@ -166,7 +166,7 @@ rep_control_pipeline2
 
 # %%
 
-coeff=8.0
+coeff=4.0
 
 activations = {}
 for layer in hidden_layers:
@@ -286,7 +286,6 @@ def create_hs_ds(ds_name, ds_tokens, pipeline, activations=None, f = None, batch
 for ds_name in cfg.datasets:
     
     # load dataset
-    ds_name = cfg.datasets[0]
     N=sum(cfg.max_examples)
     ds_tokens = load_preproc_dataset(ds_name, tokenizer, N=N, seed=cfg.seed, num_shots=cfg.num_shots, max_length=cfg.max_length)
 
