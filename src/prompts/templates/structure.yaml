@@ -1,9 +1,11 @@
 templates:
-  chatml: "{% if system %}<|system|>{{system}}\n<end>\n{% endif %}<|user|>{{user}}\n<|end|>\n<|response|>{{response}}{% if response %}\n<|end|>\n{% endif %}"
+  chatml: "{% if system %}<|system|>{{system}}\n<end>\n{% endif %}<|user|>{{user}}\n<|end|>\n<|response|>{{assistant}}{% if assistant %}\n<|end|>\n{% endif %}"
 
   # # https://github.com/tloen/alpaca-lora/blob/main/templates/alpaca.json
-  llama: "{% if system %}{{system}}\n\n{% endif %}### Instruction\n{{user}}\n\n### Response:\n{{response}}{% if response %}\n\n{% endif %}"
+  llama: "{% if system %}{{system}}\n\n{% endif %}### Instruction\n{{user}}\n\n### Response:\n{{assistant}}{% if assistant %}\n\n{% endif %}"
 
-  llama2: "<s>{% if system %}<<SYS>>\n{{system}}\n<</SYS>>\n\n{% endif %}[INST] \n{{user}} [/INST]\n\n[ASST] {{response}}{% if response %} [/ASST]\n\n{% endif %}"
+  llama2: "<s>{% if system %}<<SYS>>\n{{system}}\n<</SYS>>{% endif %}[INST] {{user}}[/INST]\n\n[ASST] {{assistant}}{% if assistant %} [/ASST]\n\n{% endif %}"
 
-  vicuna: "{% if system %}{{system}} {% endif %}USER: {{user}} ASSISTANT: {% if response %}{{response}}{% endif %}"
+  mistral: "<s>{% if system %}{{system}}{% endif %}[INST] {{user}}[/INST]{{assistant}}{% if assistant %}</s>{% endif %}"
+
+  vicuna: "{% if system %}{{system}} {% endif %}USER: {{user}} ASSISTANT: {% if assistant %}{{assistant}}{% endif %}"

@@ -7,6 +7,8 @@ from collections import Counter
 from random import Random
 from typing import Any, Iterator, Literal, List, Dict
 from pathlib import Path
+
+from jinja2 import TemplateError
 from datasets import ClassLabel, Dataset, Value, load_dataset
 import yaml
 import numpy as np
@@ -31,6 +33,7 @@ from src.models.load import verbose_change_param, AutoConfig, AutoTokenizer, Aut
 TEMPLATES_FOLDER_PATH = Path(__file__).parent / "templates"
 
 def load_prompt_structure(path='structure.yaml', prompt_format='llama2'):
+    # TODO: replace with https://huggingface.co/docs/transformers/main/chat_templating
     f = TEMPLATES_FOLDER_PATH / path
     yaml_dict = yaml.load(f.open('r'), Loader=yaml.FullLoader)
     templates = yaml_dict["templates"]
@@ -217,7 +220,7 @@ def _convert_to_prompts(
     prompt_format: str = "chatml",
 ) -> list:
     """Prompt-generating function to pass to `IterableDataset.map`."""
-    prompt_template = load_prompt_structure(prompt_format=prompt_format)
+    # prompt_template = load_prompt_structure(prompt_format=prompt_format)
     
     prompts = []
     templates = list(prompter.templates.values())
@@ -250,7 +253,10 @@ def _convert_to_prompts(
                 if instructed_to_lie: fake_example['label'] = int(fake_example['label']==0)
 
                 q, a = template.apply(fake_example)
-                prompt_parts = [dict(user=q)]
+                messages = [
+                    
+                    dict(role='user', content=q)
+                ]
                 prompt_counter[(sys_instr + q, a)] += 1
 
                 if fewshot_iter is not None:
@@ -263,23 +269,20 @@ def _convert_to_prompts(
                             assert e['label']>=0
                             assert e['label']<2
                         
-                    fewshot_texts = [
-                        dict(user=q, response=a.strip()) for q, a in map(template.apply, fewshot_examples)
-                    ]
-                    for d in fewshot_texts:
+                    fewshot_texts = []
+                    for q, a in map(template.apply, fewshot_examples):
+                        fewshot_texts.append(dict(role='user', content=q))
+                        fewshot_texts.append(dict(role='assistant', content=a.strip()))
                         # some of the answers have extra trailing text, that's OK. But extra preceeding text is not, let's check for that
-                        assert any([any([d['response'].startswith(a) for a in ac]) for ac in answer_choices]), f"fewshot response `{d['response']}` has extra preceeding text compared to allowed choices: {answer_choices}. template is: {template.name}"
-                    prompt_parts = fewshot_texts + prompt_parts
-                    
-                prompt_parts[0]['system'] = sys_instr
-                
-                q = "".join([prompt_template.render(**p) for p in prompt_parts])
+                        aa = a.strip()
+                        assert any([any([aa.startswith(a) for a in ac]) for ac in answer_choices]), f"fewshot response `{aa}` has extra preceeding text compared to allowed choices: {answer_choices}. template is: {template.name}"
+                    messages = [dict(role='system', content=sys_instr)] + fewshot_texts + messages
 
                 prompts.append(dict(
                     # Strip whitespace from the answer to make it easier to
                     # compare with the model's output
                     answer=a.strip(),
-                    question=q,
+                    messages=messages,
                     
                     answer_choices=answer_choices,
                     template_name=template.name,
@@ -317,9 +320,24 @@ def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int
     # The prompt is the thing we most often have to change and debug. So we do it explicitly here.
     # We do it as transforms on a huggingface dataset.
     # In this case we use multishot examples from train, and use the test set to generated the hidden states dataset. We will test generalisation on a whole new dataset.
+    
+    def format_prompt(tokenizer, messages):
+        # TODO if not chat template is present, load it from structure.yaml onto tokenizer
+        # https://huggingface.co/docs/transformers/main/chat_templating
+        try:
+            q = tokenizer.apply_chat_template(messages, tokenize=False)
+        except Exception, TemplateError as e:
+            if 'Conversational roles' in e.message:
+                system = messages[0]['content']
+                q = tokenizer.apply_chat_template(messages[1:], tokenize=False)
+                q = system + q
+            else:
+                raise e
+        return q
 
     ds_tokens = (
         ds_prompts
+        .map(lambda ex: {'question': format_prompt(tokenizer, ex['messages'])}, desc="format_prompt")
         .map(
             lambda ex: tokenizer(
                 ex["question"], padding="max_length", max_length=max_length, truncation=True, add_special_tokens=True,
