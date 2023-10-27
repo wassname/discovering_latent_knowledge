@@ -5,3 +5,5 @@ templates:
   llama: "{% if system %}{{system}}\n\n{% endif %}### Instruction\n{{user}}\n\n### Response:\n{{response}}{% if response %}\n\n{% endif %}"
 
   llama2: "<s>{% if system %}<<SYS>>\n{{system}}\n<</SYS>>\n\n{% endif %}[INST] \n{{user}} [/INST]\n\n[ASST] {{response}}{% if response %} [/ASST]\n\n{% endif %}"
+
+  vicuna: "{% if system %}{{system}} {% endif %}USER: {{user}} ASSISTANT: {% if response %}{{response}}{% endif %}"

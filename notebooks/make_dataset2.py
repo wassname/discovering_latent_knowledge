@@ -52,6 +52,7 @@ import datasets
 from src.config import root_folder
 from pathvalidate import sanitize_filename
 from src.helpers.ds import ds_keep_cols
+from src.datasets.intervene import create_cache_interventions 
 
 # from sklearn.linear_model import LogisticRegression
 # from sklearn.metrics import f1_score, roc_auc_score, accuracy_score
@@ -67,8 +68,6 @@ parser = ArgumentParser(add_help=False)
 parser.add_arguments(ExtractConfig, dest="run")
 args = parser.parse_args()
 cfg = args.run
-    
-# cfg = ExtractConfig(max_examples=(200, 200), model=model_name_or_path, max_length=666)
 print(cfg)
 
 model, tokenizer = load_model(cfg.model)
@@ -87,7 +86,7 @@ tokenizer_args=dict(padding="max_length", max_length=cfg.max_length, truncation=
 # %%
 
             
-def load_rep_reader(model, tokenizer, cfg, N_fit_examples=20, batch_size=2, rep_token = -1, n_difference = 1, direction_method = 'pca'):
+def create_cache_interventions(model, tokenizer, cfg, N_fit_examples=20, batch_size=2, rep_token = -1, n_difference = 1, direction_method = 'pca'):
     """
     We want one set of interventions per model
     
@@ -100,7 +99,7 @@ def load_rep_reader(model, tokenizer, cfg, N_fit_examples=20, batch_size=2, rep_
         
         hidden_layers = list(range(cfg.layer_padding, model.config.num_hidden_layers, cfg.layer_stride))
         
-        dataset_fit = load_preproc_dataset('imdb', tokenizer, N=N_fit_examples, seed=cfg.seed, num_shots=cfg.num_shots, max_length=cfg.max_length)
+        dataset_fit = load_preproc_dataset('imdb', tokenizer, N=N_fit_examples, seed=cfg.seed, num_shots=cfg.num_shots, max_length=cfg.max_length, prompt_format=cfg.prompt_format)
         
         rep_reading_pipeline = pipeline("rep-reading", model=model, tokenizer=tokenizer)
         honesty_rep_reader = rep_reading_pipeline.get_directions(
@@ -131,7 +130,7 @@ def load_rep_reader(model, tokenizer, cfg, N_fit_examples=20, batch_size=2, rep_
 N_fit_examples = 30
 rep_token = -1
 
-honesty_rep_reader = load_rep_reader(model, tokenizer, cfg, N_fit_examples=N_fit_examples, batch_size=batch_size, rep_token=rep_token)
+honesty_rep_reader = create_cache_interventions(model, tokenizer, cfg, N_fit_examples=N_fit_examples, batch_size=batch_size, rep_token=rep_token)
 
 hidden_layers = sorted(honesty_rep_reader.directions.keys())
 hidden_layers
@@ -287,7 +286,7 @@ for ds_name in cfg.datasets:
     
     # load dataset
     N=sum(cfg.max_examples)
-    ds_tokens = load_preproc_dataset(ds_name, tokenizer, N=N, seed=cfg.seed, num_shots=cfg.num_shots, max_length=cfg.max_length)
+    ds_tokens = load_preproc_dataset(ds_name, tokenizer, N=N, seed=cfg.seed, num_shots=cfg.num_shots, max_length=cfg.max_length, prompt_format=cfg.prompt_format)
 
     N_train_split = (len(ds_tokens) - N_fit_examples) //2
     

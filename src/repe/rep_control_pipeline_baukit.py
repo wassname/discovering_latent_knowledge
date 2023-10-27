@@ -15,8 +15,9 @@ from transformers.modeling_outputs import ModelOutput
 from src.datasets.scores import choice2ids, default_class2choices, scores2choice_probs2
 # from src.datasets.scores import scores2choice_probs
 from src.helpers.torch import clear_mem, detachcpu
+from src.datasets.intervene import intervention_meta_fn2, Activations
 
-Activations = NewType("Activations", Dict[str, torch.Tensor])
+
 
 def try_half(v):
     if isinstance(v, torch.Tensor):
@@ -34,33 +35,6 @@ def row_choice_ids(answer_choices, tokenizer):
     return choice2ids([c for c in answer_choices], tokenizer)
 
 
-def intervene(output, activation):
-    # TODO need attention mask
-    assert output.ndim == 3, f"expected output to be (batch, seq, vocab), got {output.shape}"
-    return output + activation.to(output.device)[None, None, :]
-
-def intervention_meta_fn2(
-    outputs: torch.Tensor, layer_name: str, activations: Activations
-) -> torch.Tensor:
-    """see
-    - honest_llama: https://github.com/likenneth/honest_llama/blob/e010f82bfbeaa4326cef8493b0dd5b8b14c6da67/validation/validate_2fold.py#L114
-    - baukit: https://github.com/davidbau/baukit/blob/main/baukit/nethook.py#L42C1-L45C56
-
-    Usage:
-        edit_output = partial(intervention_meta_fn2, activations=activations)
-        with TraceDict(model, layers_to_intervene, edit_output=edit_output) as ret:
-            ...
-
-    """
-    if type(outputs) is tuple:
-        output0 = intervene(outputs[0], activations[layer_name])
-        return tuple(output0, *outputs[1:])
-    elif type(outputs) is torch.Tensor:
-        return intervene(outputs, activations[layer_name])
-    else:
-        raise ValueError(f"outputs must be tuple or tensor, got {type(outputs)}")
-    
-    
 # def split_outputs(o):
 
 

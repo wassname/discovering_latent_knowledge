@@ -298,7 +298,7 @@ def _convert_to_prompts(
 
 
 
-def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int, split_type:str="train", seed=42, num_shots=1, max_length=999) -> Dataset:
+def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int, prompt_format:str, split_type:str="train", seed=42, num_shots=1, max_length=999) -> Dataset:
     """load a preprocessed dataset of tokens."""
     ds_prompts = Dataset.from_generator(
         load_prompts,
@@ -308,7 +308,7 @@ def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int
             split_type=split_type,
             # template_path=template_path,
             seed=seed,
-            prompt_format='llama',
+            prompt_format=prompt_format,
             N=N*3,
         ),
     )

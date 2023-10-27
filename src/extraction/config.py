@@ -10,9 +10,9 @@ class ExtractConfig(Serializable):
     """Names of HF datasets to use, e.g. `"super_glue:boolq"` or `"imdb"` `"glue:qnli"""
     
     # model: str = "TheBloke/WizardCoder-Python-13B-V1.0-GPTQ"
-    # model: str = "TheBloke/Wizard-Vicuna-13B-Uncensored-GPTQ"
+    model: str = "TheBloke/Wizard-Vicuna-13B-Uncensored-GPTQ"
     # model: str = "TheBloke/Wizard-Vicuna-7B-Uncensored-GPTQ"
-    model: str = "TheBloke/Mistral-7B-Instruct-v0.1-GPTQ"
+    # model: str = "TheBloke/Mistral-7B-Instruct-v0.1-GPTQ"
     # model: str = "TheBloke/Llama-2-13B-chat-GPTQ"
     """HF model string identifying the language model to extract hidden states from."""
 
@@ -24,6 +24,9 @@ class ExtractConfig(Serializable):
 
     max_examples: tuple[int, int] = (100, 100)
     """Maximum number of examples to use from each split of the dataset."""
+    
+    prompt_format: str = "vicuna"
+    """llama, llama2, chatml, see structure.yaml file."""
 
     num_shots: int = 1
     """Number of examples for few-shot prompts. If zero, prompts are zero-shot."""
