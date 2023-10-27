@@ -311,10 +311,14 @@ def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int
             split_type=split_type,
             # template_path=template_path,
             seed=seed,
-            prompt_format=prompt_format,
+            # prompt_format=prompt_format,
             N=N*3,
         ),
     )
+    
+    
+    if tokenizer.chat_template is None:
+        tokenizer.chat_template = load_prompt_structure(prompt_format=prompt_format)
 
     # ## Format prompts
     # The prompt is the thing we most often have to change and debug. So we do it explicitly here.
@@ -326,7 +330,7 @@ def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int
         # https://huggingface.co/docs/transformers/main/chat_templating
         try:
             q = tokenizer.apply_chat_template(messages, tokenize=False)
-        except Exception, TemplateError as e:
+        except (Exception, TemplateError) as e:
             if 'Conversation roles must alternate user/assistant/user/assistant/...' in e.message:
                 system = messages[0]['content']
                 q = tokenizer.apply_chat_template(messages[1:], tokenize=False)

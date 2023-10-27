@@ -10,9 +10,9 @@ class ExtractConfig(Serializable):
     """Names of HF datasets to use, e.g. `"super_glue:boolq"` or `"imdb"` `"glue:qnli"""
     
     # model: str = "TheBloke/WizardCoder-Python-13B-V1.0-GPTQ"
-    model: str = "TheBloke/Wizard-Vicuna-13B-Uncensored-GPTQ"
+    # model: str = "TheBloke/Wizard-Vicuna-13B-Uncensored-GPTQ"
     # model: str = "TheBloke/Wizard-Vicuna-7B-Uncensored-GPTQ"
-    # model: str = "TheBloke/Mistral-7B-Instruct-v0.1-GPTQ"
+    model: str = "TheBloke/Mistral-7B-Instruct-v0.1-GPTQ"
     # model: str = "TheBloke/Llama-2-13B-chat-GPTQ"
     """HF model string identifying the language model to extract hidden states from."""
 
@@ -54,5 +54,5 @@ class ExtractConfig(Serializable):
     template_path: str | None = None
     """Path to pass into `DatasetTemplates`. By default we use the dataset name."""
     
-    max_length: int | None = 666
+    max_length: int | None = 700
     """Maximum length of the input sequence passed to the tokenize encoder function"""
