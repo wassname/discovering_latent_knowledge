@@ -12,7 +12,7 @@ from baukit.nethook import Trace, TraceDict, recursive_copy
 from functools import partial
 from einops import rearrange
 from transformers.modeling_outputs import ModelOutput
-from src.datasets.scores import choice2ids, default_class2choices, scores2choice_probs2
+from src.datasets.scores import choice2ids, default_class2choices, logits2choice_probs2
 # from src.datasets.scores import scores2choice_probs
 from src.helpers.torch import clear_mem, detachcpu
 from src.datasets.intervene import intervention_meta_fn2, Activations
@@ -89,9 +89,11 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         # make intervention functions
         layers_names = [self.layer_name_tmpl.format(i) for i in activations.keys()]                
         activations_pos_i = Activations({self.layer_name_tmpl.format(k):v for k,v in activations.items()})
-        activations_neg_i = Activations({self.layer_name_tmpl.format(k):-v for k,v in activations.items()})
+        activations_neg_i = Activations({self.layer_name_tmpl.format(k):-1. * v for k,v in activations.items()})
+        activations_neut = Activations({self.layer_name_tmpl.format(k):0. * v for k,v in activations.items()})
         edit_fn_pos = partial(intervention_meta_fn2, activations=activations_pos_i)
         edit_fn_neg = partial(intervention_meta_fn2, activations=activations_neg_i)
+        edit_fn_neu = partial(intervention_meta_fn2, activations=activations_neut)
         
         self.model.eval()
         model_in = dict(
@@ -103,8 +105,11 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         )
         
         def transform_model_output(o):
+            assert torch.isfinite(o['logits']).all()
+            
             # hidden states come at as lists of layers, lets stack them
-            o['hidden_states'] = rearrange(list(o['hidden_states']), 'l b t h -> b l t h')
+            o['hidden_states'] = rearrange(list(o['hidden_states']), 'l b t h -> b l t h')            
+            assert torch.isfinite(o['hidden_states']).all()
             
             # we only want the last token
             o = ModelOutput(end_hidden_states=o['hidden_states'][:, :, -1], end_logits=o['logits'][:, -1])
@@ -119,7 +124,7 @@ class RepControlPipeline2(FeatureExtractionPipeline):
                 outputs_pos = transform_model_output(self.model(**model_in))
                 
             with TraceDict(
-                self.model, layers_names, detach=True, edit_output=edit_fn_neg
+                self.model, layers_names, detach=True, edit_output=edit_fn_neu
             ) as ret:
                 outputs_neg = transform_model_output(self.model(**model_in))
                 
@@ -160,9 +165,13 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         
         o['choice_ids'] = row_choice_ids(answer_choices, self.tokenizer)
         
+        assert torch.isfinite(o['end_logits']).all()
         ii = o['end_logits'].shape[1]
-        p = o['choice_probs'] = torch.stack([scores2choice_probs2(o['end_logits'][:, i], o['choice_ids']) for i in range(ii)], 1)
-        o['ans'] = p[1] / (torch.sum(p, 0) + 1e-5)
+        logits = o['end_logits']#.softmax(0)
+        
+        # shape[choices, intervention_version]
+        p = o['choice_probs'] = torch.stack([logits2choice_probs2(logits[:, i], o['choice_ids']) for i in range(ii)], 1)
+        o['ans'] = p[1] / (torch.sum(p, 0) + 1e-12)
         
         
         # lets delete all the large arrays we don't need. We don't need anything with 3 dims, as we only need the things from the last token

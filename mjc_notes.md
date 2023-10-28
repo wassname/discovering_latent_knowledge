@@ -1854,8 +1854,20 @@ Got it working with coder... poor results :(Trying with m
 
 istral istaea, because maybe I need a chat not a code model. It is uncensored!
 
-- [ ] I have poor choice coverag however
+QC
+
+- [x] I have poor choice coverag however
 maybe I should just use the huggingface chat template? https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1 
 
 
 - [ ] Also I may be intervening to much, as I get nonsensicle answers. I need to add the intervention QC!
+
+- [x] Why does wizard-vicuna not work... it's because of the stupid <s> token I think. It wasn't trained with it and it drops context
+
+- [x] Oh it looks like my few shots might be wrong?? - fixes
+
+# 2023-10-28 12:33:27
+
+OK intervening in minstral is likely to give nans :bug:
+
+OK it happens with some interventions. The negative one? Maybe it's not valid to reverse it?!

@@ -32,14 +32,10 @@ from src.models.load import verbose_change_param, AutoConfig, AutoTokenizer, Aut
 # Local path to the folder containing the templates
 TEMPLATES_FOLDER_PATH = Path(__file__).parent / "templates"
 
-def load_prompt_structure(path='structure.yaml', prompt_format='llama2'):
-    # TODO: replace with https://huggingface.co/docs/transformers/main/chat_templating
-    f = TEMPLATES_FOLDER_PATH / path
-    yaml_dict = yaml.load(f.open('r'), Loader=yaml.FullLoader)
-    templates = yaml_dict["templates"]
-    jinja = templates[prompt_format]
-    prompt_template = env.from_string(jinja)
-    return prompt_template
+def load_prompt_structure(prompt_format='llama2'):
+    # for use with https://huggingface.co/docs/transformers/main/chat_templating is the tokenizer doesn't include it
+    f = TEMPLATES_FOLDER_PATH  / "prompt_formats" / f"{prompt_format}.jinja2"
+    return f.open().read()
 
 
 def load_default_sys_instructions(path='system.yaml'):
@@ -50,15 +46,6 @@ def load_default_sys_instructions(path='system.yaml'):
 
 default_sys_instructions = load_default_sys_instructions()
 
-
-# @functools.lru_cache()
-# def count_tokens(s):
-#     return len(tokenizer(s).input_ids)
-
-# def answer_len(answer_choices: list):
-#     a = count_tokens(answer_choices[0])
-#     b = count_tokens(answer_choices[1])
-#     return max(a, b)
 
 def sample_n_true_y_false_prompts(prompts, num_truth=1, num_lie=1, seed=42):
     """sample some truth and some false"""
@@ -206,6 +193,11 @@ def load_prompts(
             yield p
 
 
+def cast_example(e):
+    assert e['label']>=0
+    assert e['label']<=1
+    e['label']=bool(e['label'])
+    return e
 
 
 def _convert_to_prompts(
@@ -221,7 +213,7 @@ def _convert_to_prompts(
 ) -> list:
     """Prompt-generating function to pass to `IterableDataset.map`."""
     # prompt_template = load_prompt_structure(prompt_format=prompt_format)
-    
+    example = cast_example(example)
     prompts = []
     templates = list(prompter.templates.values())
 
@@ -249,10 +241,10 @@ def _convert_to_prompts(
         answer_choices = [[c] for c in answer_choices]
         for instructed_to_lie in [False, True]:
             for sys_instr_name, sys_instr in sys_instructions[instructed_to_lie].items():
-                fake_example = example.copy()
-                if instructed_to_lie: fake_example['label'] = int(fake_example['label']==0)
+                instructed_example = example.copy()
+                if instructed_to_lie: instructed_example['label'] = not bool(instructed_example['label'])
 
-                q, a = template.apply(fake_example)
+                q, a = template.apply(instructed_example)
                 messages = [
                     
                     dict(role='user', content=q)
@@ -262,12 +254,15 @@ def _convert_to_prompts(
                 if fewshot_iter is not None:
                     # Infinite iterator so we don't need to worry about StopIteration
                     fewshot_examples = next(fewshot_iter)
+                    fewshot_examples = [cast_example(e).copy() for e in fewshot_examples]
+                    
                     if instructed_to_lie: 
-                        fewshot_examples = [{**e, 'label': e['label']^0} for e in fewshot_examples]
+                        fewshot_examples = [{**e, 'label': not bool(e['label'])} for e in fewshot_examples]
                         for e in fewshot_examples:
-                            # arg, check out negation worked
+                            # arg, check negation worked
                             assert e['label']>=0
                             assert e['label']<2
+                            assert isinstance(e['label'], bool), 'labels should be bool'
                         
                     fewshot_texts = []
                     for q, a in map(template.apply, fewshot_examples):
@@ -287,7 +282,7 @@ def _convert_to_prompts(
                     answer_choices=answer_choices,
                     template_name=template.name,
                     label_true=example['label'],
-                    label_instructed=fake_example['label'],
+                    label_instructed=instructed_example['label'],
                     instructed_to_lie=instructed_to_lie,
                     sys_instr_name=sys_instr_name,
                 ))
@@ -330,8 +325,8 @@ def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int
         # https://huggingface.co/docs/transformers/main/chat_templating
         try:
             q = tokenizer.apply_chat_template(messages, tokenize=False)
-        except (Exception, TemplateError) as e:
-            if 'Conversation roles must alternate user/assistant/user/assistant/...' in e.message:
+        except TemplateError as e:
+            if 'Conversation roles must alternate user/assistant/user/assistant/...' in str(e):
                 system = messages[0]['content']
                 q = tokenizer.apply_chat_template(messages[1:], tokenize=False)
                 q = system + q
@@ -350,7 +345,7 @@ def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int
                 # return_overflowing_tokens=True,
             ),
             batched=True,
-            desc='tokenize'
+            desc='tokenize',
         )
         .map(lambda r: {"truncated": np.sum(r["attention_mask"], 0)==max_length}, desc='truncated')
         .map(

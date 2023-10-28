@@ -18,6 +18,7 @@ plt.style.use('ggplot')
 import os, psutil
 max_dataset_memory = f"{psutil.virtual_memory().total //2}"
 os.environ["HF_DATASETS_IN_MEMORY_MAX_SIZE"] = max_dataset_memory
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 from pathlib import Path
 from tqdm.auto import tqdm
@@ -170,36 +171,17 @@ coeff=4.0
 activations = {}
 for layer in hidden_layers:
     activations[layer] = torch.tensor(coeff * honesty_rep_reader.directions[layer] * honesty_rep_reader.direction_signs[layer]).to(model.device).half()
-    
+
+assert torch.isfinite(torch.concat(list(activations.values()))).all()
 
 # %%
-def metrics(control_outputs_neg, baseline_outputs, control_outputs):
-    signs = [-1, 0, 1]
-    for i in range(len(baseline_outputs)):
-        ranked = []
-        
-        for j, r in enumerate([control_outputs_neg, baseline_outputs, control_outputs]):        
-            choices = r[i]['answer_choices']
-            label = r[i]['label_true']
-            ans = r[i]['ans']
-            sign = signs[j]
-            ranked.append(ans)
-            choice_true = choices[label]
-            if label==0:
-                ans *= -1            
-            print(f"==== Control ({signs[j]}) ====")
-            print(f"Score: {ans:02.2%} of true ans `{choice_true}`")
-            # print(f"Text ans: {r['text_ans'][i]}") 
-        
-        is_ranked = (np.argsort(ranked)==np.arange(3)).all()
-        print(f"Ranked? {is_ranked} {ranked}")
-        print()
+
 
 
 
 # %%
 if TEST:
-    # unit test: with multiple input types: single, list, generator, dataset
+    # unit test pipeline: with multiple input types: single, list, generator, dataset
     ## single
     input_types = {'single':dataset_train[0], 'list':[dataset_train[i] for i in range(3)], 'generator':iter(dataset_train.select(range(3))), 'dataset':dataset_train.select(range(3)).to_iterable_dataset()}
     for name, ds in input_types.items():
@@ -219,21 +201,10 @@ if TEST:
 # %%
 # test intervention quality
 # TODO perhaps move this to intervention create/load/cache
-def test_intervention_quality(dataset_train):
-    inputs = dataset_train[:3]
-    activations_neg = {k:-v for k, v in activations.items()}
-    activations_none = {k:v*0 for k, v in activations.items()}
-    model.eval()
-    with torch.no_grad():
-        baseline_outputs = rep_control_pipeline2(inputs, batch_size=batch_size, activations=activations_none)
-        control_outputs = rep_control_pipeline2(inputs, activations=activations, batch_size=batch_size)
-        control_outputs_neg = rep_control_pipeline2(inputs, activations=activations_neg, batch_size=batch_size)
-
-
-    metrics(control_outputs_neg, baseline_outputs, control_outputs)
+from src.datasets.intervene import test_intervention_quality
 
 if TEST:
-    test_intervention_quality(dataset_train)
+    test_intervention_quality(dataset_train, activations, model, rep_control_pipeline2, batch_size=batch_size)
 
 # %%
 
@@ -281,7 +252,13 @@ def create_hs_ds(ds_name, ds_tokens, pipeline, activations=None, f = None, batch
     return ds1, f
 
 
+if cfg.disable_cache:
+    from datasets import disable_caching
+    disable_caching()
+    
+from src.datasets.load import ds2df, load_ds, get_ds_name, filter_ds_to_known, qc_ds
 
+    
 for ds_name in cfg.datasets:
     
     # load dataset
@@ -306,6 +283,11 @@ for ds_name in cfg.datasets:
     clear_mem()
     ds1, f = create_hs_ds(ds_name, dataset_test, rep_control_pipeline2, split_type="test", debug=True, batch_size=batch_size, activations=activations)
     clear_mem()
+    
+    try:
+        qc_ds(ds1)
+    except:
+        logger.exception(f"QC failed for {ds_name}")
 
 # TODO add qc
 # TODO train and test

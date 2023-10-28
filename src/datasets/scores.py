@@ -82,11 +82,14 @@ def choice2ids(all_choices: List[List[str]], tokenizer: PreTrainedTokenizer) -> 
     return choices
 
 
-def scores2choice_probs2(logits, choiceids: List[List[int]]):
+def logits2choice_probs2(logits, choiceids: List[List[int]]):
     """calculate the probability for each group of choices."""
     assert logits.ndim==1, f"expected logits to be 1d, got {logits.shape}"
+    assert logits.sum(0).abs()>2, 'pass in logits, not probs. you may have accidentally passed in a softmaxed values'
+    choiceids = [list(set(i)) for i in choiceids] # we don't want to double count
     probs = torch.softmax(logits, 0)  # shape [tokens, inferences)
     probs_c = torch.tensor([[probs[cc] for cc in c] for c in choiceids]).sum(1)  # sum over alternate choices e.g. [['decrease', 'dec'],['inc', 'increase']]
+    assert probs_c.sum()<=1.01, f"expected probs to sum to 1, got {probs_c.sum()}"
     return probs_c
 
 def row_choice_ids(r, tokenizer):

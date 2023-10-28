@@ -14,7 +14,7 @@ def get_features(cfg: ExtractConfig, config: AutoConfig) -> Features:
         "end_hidden_states": Array3D(dtype="float32", id=None, shape=(l, h, interventions)),
         "end_logits": Array2D(dtype="float32", id=None, shape=(v, interventions)),
         "choice_probs": Array2D(dtype="float32", id=None, shape=(2, interventions)),
-        "label_true": Value(dtype="int64", id=None),
+        "label_true": Value(dtype="bool", id=None),
         "instructed_to_lie": Value(dtype="bool", id=None),
         "question": Value(dtype="string", id=None),
         "answer_choices": Sequence(

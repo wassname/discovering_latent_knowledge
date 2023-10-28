@@ -21,7 +21,10 @@ InterventionDict = NewType('InterventionDict', Dict[str, List[Tuple[np.ndarray, 
 def intervene(output, activation):
     # TODO need attention mask
     assert output.ndim == 3, f"expected output to be (batch, seq, vocab), got {output.shape}"
-    return output + activation.to(output.device)[None, None, :]
+    # assert torch.isfinite(output).all(), 'model output nan'
+    output2 = output + activation.to(output.device)[None, None, :]
+    # assert torch.isfinite(output2).all(), 'intervention lead to nan'
+    return output2
 
 def intervention_meta_fn2(
     outputs: torch.Tensor, layer_name: str, activations: Activations
@@ -144,3 +147,40 @@ def create_cache_interventions(model, tokenizer, cfg, N_fit_examples=20, batch_s
         logger.info(f'Loaded interventions from {intervention_f}')
             
     return honesty_rep_reader
+
+
+
+def intervention_metrics(control_outputs_neg, baseline_outputs, control_outputs):
+    signs = [-1, 0, 1]
+    for i in range(len(baseline_outputs)):
+        ranked = []
+        
+        for j, r in enumerate([control_outputs_neg, baseline_outputs, control_outputs]):        
+            choices = r[i]['answer_choices']
+            label = r[i]['label_true']
+            ans = r[i]['ans']
+            sign = signs[j]
+            ranked.append(ans)
+            choice_true = choices[label]
+            if label==0:
+                ans *= -1            
+            print(f"==== Control ({signs[j]}) ====")
+            print(f"Score: {ans:02.2%} of true ans `{choice_true}`")
+            # print(f"Text ans: {r['text_ans'][i]}") 
+        
+        is_ranked = (np.argsort(ranked)==np.arange(3)).all()
+        print(f"Ranked? {is_ranked} {ranked}")
+        print()
+
+def test_intervention_quality(dataset_train, activations, model, rep_control_pipeline2, batch_size=2):
+    inputs = dataset_train[:3]
+    activations_neg = {k:-v for k, v in activations.items()}
+    activations_none = {k:v*0 for k, v in activations.items()}
+    model.eval()
+    with torch.no_grad():
+        baseline_outputs = rep_control_pipeline2(inputs, batch_size=batch_size, activations=activations_none)
+        control_outputs = rep_control_pipeline2(inputs, activations=activations, batch_size=batch_size)
+        control_outputs_neg = rep_control_pipeline2(inputs, activations=activations_neg, batch_size=batch_size)
+
+
+    intervention_metrics(control_outputs_neg, baseline_outputs, control_outputs)

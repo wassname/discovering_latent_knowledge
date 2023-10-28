@@ -12,21 +12,19 @@ class ExtractConfig(Serializable):
     # model: str = "TheBloke/WizardCoder-Python-13B-V1.0-GPTQ"
     # model: str = "TheBloke/Wizard-Vicuna-13B-Uncensored-GPTQ"
     # model: str = "TheBloke/Wizard-Vicuna-7B-Uncensored-GPTQ"
-    model: str = "TheBloke/Mistral-7B-Instruct-v0.1-GPTQ"
+    model: str = "TheBloke/Mistral-7B-Instruct-v0.1-GPTQ" # it wont lie? wtf
     # model: str = "TheBloke/Llama-2-13B-chat-GPTQ"
     """HF model string identifying the language model to extract hidden states from."""
 
+    prompt_format: str | None = None
+    """llama, llama2, chatml, as a backup to tokenizer see structure.yaml file."""
+    
     data_dirs: tuple[str, ...] = ()
     """Directory to use for caching the hiddens. Defaults to `HF_DATASETS_CACHE`."""
-
-    # int4: bool = True
-    # """Whether to perform inference in mixed int8 precision with `bitsandbytes`."""
 
     max_examples: tuple[int, int] = (100, 100)
     """Maximum number of examples to use from each split of the dataset."""
     
-    prompt_format: str = "vicuna"
-    """llama, llama2, chatml, see structure.yaml file."""
 
     num_shots: int = 1
     """Number of examples for few-shot prompts. If zero, prompts are zero-shot."""
@@ -34,10 +32,6 @@ class ExtractConfig(Serializable):
     num_variants: int = -1
     """The number of prompt templates to use for each example. If -1, all available
     templates are used."""
-
-    layers: tuple[int, ...] = ()
-    """Indices of layers to extract hidden states from. We follow the HF convention, so
-    0 is the embedding, and 1 is the output of the first transformer layer."""
 
     layer_stride: InitVar[int] = 2
     """Shortcut for `layers = (0,) + tuple(range(1, num_layers + 1, stride))`."""
@@ -56,3 +50,6 @@ class ExtractConfig(Serializable):
     
     max_length: int | None = 700
     """Maximum length of the input sequence passed to the tokenize encoder function"""
+    
+    disable_ds_cache: bool = False
+    """Disable huggingface datasets cache."""
