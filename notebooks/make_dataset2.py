@@ -252,7 +252,7 @@ def create_hs_ds(ds_name, ds_tokens, pipeline, activations=None, f = None, batch
     return ds1, f
 
 
-if cfg.disable_cache:
+if cfg.disable_ds_cache:
     from datasets import disable_caching
     disable_caching()
     

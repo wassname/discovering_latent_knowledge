@@ -59,7 +59,7 @@ class imdbHSDataModule(pl.LightningDataModule):
         b = len(self.ds_hs)
         # take the diff between layers. Shape batch, layers, hidden_states, inferences
         hs = torch.tensor(self.ds_hs['end_hidden_states'])
-        hs = hs.diff(1, axis=1)
+        hs = hs.diff(1, axis=1) # this makes it the residual between layers
         self.hs0 = hs[..., 0]
         self.hs1 = hs[..., 1]
         

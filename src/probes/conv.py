@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from .pl_ranking import PLRanking
+from .pl_ranking import PLRankingBase
 
 class ConvProbe(nn.Module):
     def __init__(self, c_in, depth=0, hs=16, dropout=0, input_dropout=0):
@@ -37,7 +37,7 @@ class ConvProbe(nn.Module):
         return self.head(h)
 
 
-class PLConvProbe(PLRanking):
+class PLConvProbe(PLRankingBase):
     def __init__(self, c_in, total_steps, lr=4e-3, weight_decay=1e-9, **kwargs):
         super().__init__(total_steps=total_steps, lr=lr, weight_decay=weight_decay)
         self.probe = ConvProbe(c_in, **kwargs)
