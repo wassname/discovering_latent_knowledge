@@ -1871,3 +1871,16 @@ maybe I should just use the huggingface chat template? https://huggingface.co/mi
 OK intervening in minstral is likely to give nans :bug:
 
 OK it happens with some interventions. The negative one? Maybe it's not valid to reverse it?!
+
+# 2023-10-30 07:41:10
+
+ideas:
+  - [x] alredy tried positive vs -1*positive it leads to a nan
+  - [x] aready tried neutral vs positive, like 80%, with good generalization, but I wonder if it's trivial?
+- [x] tried ranking vs mse. mse is still richer
+- [x] tried big vs small model, big seems to help
+- [x] Try a negative vs positve intervention - nope
+- [x] try intervening on every layer = nope
+- [x] flip x0, x1... oh wait with ranking it doesn't know which is which anyway. If I try SL I will need to
+
+I'm out of idea? it does overfit, so maybe only giving it later layers?

@@ -33,10 +33,10 @@ class ExtractConfig(Serializable):
     """The number of prompt templates to use for each example. If -1, all available
     templates are used."""
 
-    layer_stride: InitVar[int] = 2
+    layer_stride: InitVar[int] = 1
     """Shortcut for `layers = (0,) + tuple(range(1, num_layers + 1, stride))`."""
     
-    layer_padding: InitVar[int] = 4
+    layer_padding: InitVar[int] = 6
     """Skips this amount of first layers"""
 
     seed: int = 42

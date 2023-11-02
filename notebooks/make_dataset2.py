@@ -77,8 +77,10 @@ model, tokenizer = load_model(cfg.model)
 tokenizer_args=dict(padding="max_length", max_length=cfg.max_length, truncation=True, add_special_tokens=True)
 
 # %%
-# # cache busting for the transformers map and ds steps
-# !rm -rf ~/.cache/huggingface/datasets/generator
+if TEST:
+    # # cache busting for the transformers map and ds steps
+    import shutil
+    shutil.rmtree('~/.cache/huggingface/datasets/generator')
 
 
 # %% [markdown]
@@ -86,54 +88,17 @@ tokenizer_args=dict(padding="max_length", max_length=cfg.max_length, truncation=
 
 # %%
 
-            
-def create_cache_interventions(model, tokenizer, cfg, N_fit_examples=20, batch_size=2, rep_token = -1, n_difference = 1, direction_method = 'pca'):
-    """
-    We want one set of interventions per model
-    
-    So we always load a cached version if possible. to make it approx repeatable use the same dataset etc
-    """
-    model_name = cfg.model.replace('/', '-')
-    intervention_f = root_folder / 'data' / 'interventions' / f'{model_name}.pkl'
-    intervention_f.parent.mkdir(exist_ok=True, parents=True)
-    if not intervention_f.exists():        
-        
-        hidden_layers = list(range(cfg.layer_padding, model.config.num_hidden_layers, cfg.layer_stride))
-        
-        dataset_fit = load_preproc_dataset('imdb', tokenizer, N=N_fit_examples, seed=cfg.seed, num_shots=cfg.num_shots, max_length=cfg.max_length, prompt_format=cfg.prompt_format)
-        
-        rep_reading_pipeline = pipeline("rep-reading", model=model, tokenizer=tokenizer)
-        honesty_rep_reader = rep_reading_pipeline.get_directions(
-            dataset_fit['question'], 
-            rep_token=rep_token, 
-            hidden_layers=hidden_layers, 
-            n_difference=n_difference, 
-            train_labels=dataset_fit['label_true'], 
-            direction_method=direction_method,
-            batch_size=batch_size,
-            **tokenizer_args
-        )
-        # and save
-        with open(intervention_f, 'wb') as f:
-            pickle.dump(honesty_rep_reader, f)
-            logger.info(f'Saved interventions to {intervention_f}')
-    else:
-        with open(intervention_f, 'rb') as f:
-            honesty_rep_reader = pickle.load(f)
-        logger.info(f'Loaded interventions from {intervention_f}')
-            
-    return honesty_rep_reader
-
-
 # %%
 
 # N_fit_examples = 20
 N_fit_examples = 30
 rep_token = -1
 
-honesty_rep_reader = create_cache_interventions(model, tokenizer, cfg, N_fit_examples=N_fit_examples, batch_size=batch_size, rep_token=rep_token)
+honesty_rep_reader1 = create_cache_interventions(model, tokenizer, cfg, N_fit_examples=N_fit_examples, batch_size=batch_size, rep_token=rep_token)
 
-hidden_layers = sorted(honesty_rep_reader.directions.keys())
+honesty_rep_reader2 = create_cache_interventions(model, tokenizer, cfg, N_fit_examples=N_fit_examples, batch_size=batch_size, rep_token=rep_token, get_negative=True)
+
+hidden_layers = sorted(honesty_rep_reader1.directions.keys())
 hidden_layers
 
 
@@ -154,7 +119,6 @@ hidden_layers
 
 # %%
 
-
 rep_control_pipeline2 = pipeline(
     "rep-control2", 
     model=model, 
@@ -165,14 +129,10 @@ rep_control_pipeline2
 
 
 # %%
+from src.datasets.intervene import get_activations_from_reader
 
-coeff=4.0
-
-activations = {}
-for layer in hidden_layers:
-    activations[layer] = torch.tensor(coeff * honesty_rep_reader.directions[layer] * honesty_rep_reader.direction_signs[layer]).to(model.device).half()
-
-assert torch.isfinite(torch.concat(list(activations.values()))).all()
+activations1 = get_activations_from_reader(honesty_rep_reader1, hidden_layers, dtype=model.dtype, device=model.device)
+activations2 = get_activations_from_reader(honesty_rep_reader2, hidden_layers, dtype=model.dtype, device=model.device)
 
 # %%
 
@@ -186,7 +146,7 @@ if TEST:
     input_types = {'single':dataset_train[0], 'list':[dataset_train[i] for i in range(3)], 'generator':iter(dataset_train.select(range(3))), 'dataset':dataset_train.select(range(3)).to_iterable_dataset()}
     for name, ds in input_types.items():
         print(f"==== {name} ====")
-        r = rep_control_pipeline2(ds, activations=activations, batch_size=2)
+        r = rep_control_pipeline2(ds, activations=activations1, batch_size=2)
         if isinstance(r, dict):
             r = [r]
         elif isinstance(r, list):
@@ -204,7 +164,9 @@ if TEST:
 from src.datasets.intervene import test_intervention_quality
 
 if TEST:
-    test_intervention_quality(dataset_train, activations, model, rep_control_pipeline2, batch_size=batch_size)
+    test_intervention_quality(dataset_train, activations1, model, rep_control_pipeline2, batch_size=batch_size)
+    
+    test_intervention_quality(dataset_train, activations2, model, rep_control_pipeline2, batch_size=batch_size)
 
 # %%
 
@@ -258,7 +220,7 @@ if cfg.disable_ds_cache:
     
 from src.datasets.load import ds2df, load_ds, get_ds_name, filter_ds_to_known, qc_ds
 
-    
+activations=[activations1, activations2]
 for ds_name in cfg.datasets:
     
     # load dataset

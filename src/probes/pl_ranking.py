@@ -158,9 +158,12 @@ class PLConvProbeLinear(PLRankingBase):
             else: # last layer
                 layers.append(nn.Conv1d(hs*4, 1, 1))
         self.conv = nn.Sequential(*layers)
+        
+        n = c_in[0]
         self.head = nn.Sequential(
-            LinBnDrop(c_in[0], 1),
-            nn.Linear(1, 1),            
+            LinBnDrop(n, n),
+            LinBnDrop(n, n),
+            nn.Linear(n, 1),            
         )
         
     def forward(self, x):

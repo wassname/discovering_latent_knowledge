@@ -50,7 +50,7 @@ class RepControlPipeline2(FeatureExtractionPipeline):
     def __call__(self, model_inputs, **kwargs):
         return super().__call__(model_inputs, **kwargs)
     
-    def _sanitize_parameters(self, truncation=None, tokenize_kwargs=None, return_tensors=None, activations=None, **kwargs):
+    def _sanitize_parameters(self, activations=None, truncation=None, tokenize_kwargs=None, return_tensors=None, **kwargs):
         """This processed the init params."""
         if tokenize_kwargs is None:
             tokenize_kwargs = {}
@@ -83,16 +83,14 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         inputs["attention_mask"] = torch.tensor(inputs['attention_mask'], dtype=torch.bool, device=self.model.device)
         return inputs
 
-    def _forward(self, inputs, activations) -> ModelOutput:
+    def _forward(self, inputs: dict, activations: List[Dict[str, float]]) -> ModelOutput:
         assert inputs['input_ids'].ndim == 2, f"expected input_ids to be (batch, seq), got {inputs['input_ids'].shape}"
 
         # make intervention functions
-        layers_names = [self.layer_name_tmpl.format(i) for i in activations.keys()]                
-        activations_pos_i = Activations({self.layer_name_tmpl.format(k):v for k,v in activations.items()})
-        activations_neg_i = Activations({self.layer_name_tmpl.format(k):-1. * v for k,v in activations.items()})
-        activations_neut = Activations({self.layer_name_tmpl.format(k):0. * v for k,v in activations.items()})
+        layers_names = [self.layer_name_tmpl.format(i) for i in activations[0].keys()]                
+        activations_pos_i = Activations({self.layer_name_tmpl.format(k):v for k,v in activations[1].items()})
+        activations_neut = Activations({self.layer_name_tmpl.format(k):0. * v for k,v in activations[0].items()})
         edit_fn_pos = partial(intervention_meta_fn2, activations=activations_pos_i)
-        edit_fn_neg = partial(intervention_meta_fn2, activations=activations_neg_i)
         edit_fn_neu = partial(intervention_meta_fn2, activations=activations_neut)
         
         self.model.eval()
