@@ -1883,4 +1883,4 @@ ideas:
 - [x] try intervening on every layer = nope
 - [x] flip x0, x1... oh wait with ranking it doesn't know which is which anyway. If I try SL I will need to
 
-I'm out of idea? it does overfit, so maybe only giving it later layers?
+I'm out of idea? it does overfit, so maybe only giving it later layers? That helps
