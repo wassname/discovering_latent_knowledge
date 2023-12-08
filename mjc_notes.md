@@ -1879,8 +1879,95 @@ ideas:
   - [x] aready tried neutral vs positive, like 80%, with good generalization, but I wonder if it's trivial?
 - [x] tried ranking vs mse. mse is still richer
 - [x] tried big vs small model, big seems to help
-- [x] Try a negative vs positve intervention - nope
+- [x] Try a negative vs positive intervention - nope
 - [x] try intervening on every layer = nope
 - [x] flip x0, x1... oh wait with ranking it doesn't know which is which anyway. If I try SL I will need to
 
 I'm out of idea? it does overfit, so maybe only giving it later layers? That helps
+
+
+
+# Brainstorm with Nick
+
+
+Styalized facts:
+- the pair of inferences need to be far apart
+- it's hard get the models to lie
+- using soft labels rather only truth direction helps a lot
+- yes/no have to be significant labels. or it's all junk
+
+Things I've tried:
+- ranking loss, nll, binary, dice loss
+- lots of types of pairs
+    - pair of interventions using gradient descent
+    - mcdropout pairs: didn't help, not very far apart
+    - find a linear weight modifcation (random, pca, could one that makes it lie) and get pair with a -ve and +ve intervention. This is hard and didn't work
+- Lots of way to get lies
+
+Nicks ideas:
+- soft labels - tried with mse
+- clear lying, e.g. in a game like chess
+- try other internals states which are easier and more common. e.g. optimistic/pessimistic, cooprative, love, tired, grumpy, talkative,
+- maybe it doesn't have in innner state for lies, like no habits, no signifance on it. plus it's a goodie two shoes who never lies. so train one for lying
+    - e.g. chess, it can chose to ask stockfish. e.g. it's caught 20% of the time, and forfits the game. so it would only do it when it has a chance of helping it win the game
+
+
+Maybe just lots of data > 7000
+
+
+My takeaway: 
+- Maybe there's not enougth going in small models? 
+- Maybe not enought data to decode internals?
+- Maybe need sparse VAE?
+- Maybe need a model that actually lies? So there are internal pathways
+- I have this tradoff between contrasting internal states vs plausible internal states. I want two realistic inferences which are differen't. States where I inject noise and get 90% of Yes, and 87%^of Yes are kind of useless and difficult to distinguish. On the other hand  E.g. if I generate an in intervention to get a lie, it might rely in junk outputs like "No No No No No". That might be 99% No, but it's useless. 
+
+
+# 2023-12-03 08:11:55
+
+Ideas
+- Train QLoRa few shot liar (although I hope to find a method that works on all models)
+- N>10000 (slow)
+- Use the latest space of a VAE. Maybe one that predicts the next hidden states?
+
+# 2023-12-07 14:29:00
+
+Let's try VAE. How will it work?
+
+
+Right now I'm using pipelines that do an intervention. 
+
+
+# Running
+
+```sh
+python notebooks/make_dataset2.py --max_examples 1720 220 --datasets imdb glue:qnli super_glue:boolq 
+
+```
+an in intervene.py/create_cache_interventions we get the activations that are used to intervent and get a pair of hidden states
+- rep_reading_pipeline.get_directions which uses PCA to get an intervention
+
+
+
+# 2023-12-08 07:06:05
+
+bugs?:
+- does reversing the labels work with pca since it's directionless?
+- the pca intervention does a weird even - odd from the hidden states
+
+modify PLConvProbeLinear to be like a world model? reconstruction and prediction loss...
+
+right now we are using neut? (see https://vscode.dev/github/wassname/discovering_latent_knowledge/blob/pipelinesv2/src/repe/rep_control_pipeline_baukit.py#L94 )
+
+wait each pipeline gets activations for *1 and *0. But we have a pos and neg...
+
+
+how to world models work?
+- they take in an image [64, 64, 3] and make it small e.g. [8], into a quantized space?
+- then reconstruct it they have a reconstruction loss
+- if they have another objective you can train both at once, or transitions/
+https://colab.research.google.com/drive/1rPy82rL3iZzy2_Rd3F82RwFhlVnnroIh?usp=sharing#scrollTo=2MD88v4Zvw-r
+- it's simple, the encoder is just a linear
+
+
+n_instances - remove this, another batch dim
