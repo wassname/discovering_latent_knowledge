@@ -32,12 +32,14 @@ class imdbHSDataModule(pl.LightningDataModule):
                  batch_size: int=32,
                  x_cols = ['end_hidden_states'],
                  skip_layers = 0,
+                 use_diff = True,
                 ):
         super().__init__()
         self.save_hyperparameters(ignore=["ds"])
         self.ds = ds
         self.x_cols = x_cols
         self.skip_layers = skip_layers
+        self.use_diff = use_diff
 
     def setup(self, stage: str):
         h = self.hparams
@@ -61,7 +63,8 @@ class imdbHSDataModule(pl.LightningDataModule):
         b = len(self.ds_hs)
         # take the diff between layers. Shape batch, layers, hidden_states, inferences
         hs = torch.tensor(self.ds_hs['end_hidden_states'])
-        hs = hs.diff(1, axis=1) # this makes it the residual between layers
+        if self.use_diff:
+            hs = hs.diff(1, axis=1) # this makes it the residual between layers
         if self.skip_layers:
             hs = hs[:, self.skip_layers:] # drop the first 10 layers to prevent overfitting?
         self.hs0 = hs[..., 0]

@@ -87,7 +87,8 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         assert inputs['input_ids'].ndim == 2, f"expected input_ids to be (batch, seq), got {inputs['input_ids'].shape}"
 
         # make intervention functions
-        layers_names = [self.layer_name_tmpl.format(i) for i in activations[0].keys()]                
+        layers_names = [self.layer_name_tmpl.format(i) for i in activations[0].keys()]           
+        # FIXME: [0] is positive, [1] is negative. We can also multiply by -1, 0, or 1     
         activations_pos_i = Activations({self.layer_name_tmpl.format(k):v for k,v in activations[1].items()})
         activations_neut = Activations({self.layer_name_tmpl.format(k):0. * v for k,v in activations[0].items()})
         edit_fn_pos = partial(intervention_meta_fn2, activations=activations_pos_i)

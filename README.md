@@ -71,7 +71,15 @@ pred_last_choice_is_true = y / (y_pred2-y_pred)
 pred_last_choice_is_true # [1, -1]
 ```
 
+
+# Running
+
+```sh
+python notebooks/make_dataset2.py --max_examples 1720 220 --datasets imdb glue:qnli super_glue:boolq 
+```
+
 # Description
+
 There is some previous work on this ([ELK](https://github.com/EleutherAI/elk), [DLK](https://github.com/collin-burns/discovering_latent_knowledge/blob/main/CCS.ipynb), CSS, etc) that all take varias approaches. They have this in common:
 
 - Show the model 2 statements “the sky is blue” “the sky is green”

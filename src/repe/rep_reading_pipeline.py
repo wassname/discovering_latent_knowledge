@@ -140,6 +140,7 @@ class RepReadingPipeline(Pipeline):
             relative_hidden_states = {k: np.copy(v) for k, v in hidden_states.items()}
             for layer in hidden_layers:
                 for _ in range(n_difference):
+                    # TODO: check this, it's even - odd? on what dimension?
                     relative_hidden_states[layer] = relative_hidden_states[layer][::2] - relative_hidden_states[layer][1::2]
 
 		# get the directions

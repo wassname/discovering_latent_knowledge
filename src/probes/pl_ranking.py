@@ -163,7 +163,8 @@ class PLConvProbeLinear(PLRankingBase):
         self.head = nn.Sequential(
             LinBnDrop(n, n),
             LinBnDrop(n, n),
-            nn.Linear(n, 1),            
+            nn.Linear(n, 1),  
+            # nn.Tanh(), 
         )
         
     def forward(self, x):

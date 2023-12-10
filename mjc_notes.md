@@ -1971,3 +1971,121 @@ https://colab.research.google.com/drive/1rPy82rL3iZzy2_Rd3F82RwFhlVnnroIh?usp=sh
 
 
 n_instances - remove this, another batch dim
+
+
+- nice timeseries 1d VAE from merlion https://github.dev/salesforce/Merlion/blob/01c3fc3406ebf19798cedcddbe829ae5339e1424/merlion/models/anomaly/vae.py#L186
+- simple one https://github.com/ctallec/world-models/blob/master/models/vae.py
+- neels https://github.dev/neelnanda-io/1L-Sparse-Autoencoder/blob/bcae01328a2f41d24bd4a9160828f2fc22737f75/utils.py#L106
+
+
+# 2023-12-08 10:01:13
+
+Initial obs
+- it can still overfit on the latent state, hmmm! Well maybe I need to make it very small or space or quantized (dreamer style)
+- a tanh seems to help!... just in the mse one it makes it worse... hmm.
+
+
+oh CVAE generalizes well notebooks/033_train_cvae.ipynb 
+ test/acc         0.6785010099411011     │    0.7179487347602844   
+ llm gave	did	didn't
+instructed to		
+tell a truth	0.74	NaN
+tell a lie	0.91	0.54
+ oos/acc          │    0.7257769703865051     │    0.7664233446121216     │    0.7627736926078796 
+llm gave	did	didn't
+instructed to		
+tell a truth	0.78	NaN
+tell a lie	1.00	0.66
+
+# 2023-12-08 15:44:03
+
+Questions:
+ - [ ] hmm in the anthorpic [paper](https://transformer-circuits.pub/2022/toy_model/index.html#demonstrating-setup-loss) they weight by feature importance, this seems important
+   - [x] anything else I need to know from the sparse transformer AE's?
+   - [x] what is dictionary learning? it seems to just be a huge 1 layer sparse autoencoder. no categorical latent or anything
+     - they seem to use weight norm on decoder, not tie weights. have 8 times the latent space compared to activations
+   - oh they replace activations with reconstructed
+   - oh actual training [tips](https://docs.google.com/document/u/0/d/187jfZSbhRjjQaazjYlThBsKp3Q0Pw3VdIHVST9H2dvw/mobilebasic) 
+   - what's the decoder weight norm??
+ - [x] do I need something special to make it sparse? no it looks like it's just the l1 loss
+ - [ ] 
+ - [ ] what where the dreamer learnings?
+   - two-hot latent space?? I guess that means it turns into [2, 1, 0, 1]. I'm assuming neg vs pos?
+   - symlog scaling for rewards prediction - I probobly don't need this
+   - how do the discrete states work? https://github.dev/Eclectic-Sheep/sheeprl/blob/52f49be5971c5753e18bdf328d3035334fe688f1/sheeprl/algos/dreamer_v3/agent.py#L31
+ - [ ] does my pcr probe work ok? how to debug?
+
+
+> Features Vary in Importance: Not all features are equally useful to a given task. Some can reduce the loss more than others. For an ImageNet model, where classifying different species of dogs is a central task, a floppy ear detector might be one of the most important features it can have. In contrast, another feature might only very slightly improve performance
+
+
+IRIS loss https://github.dev/eloialonso/iris/blob/ac6be401fed2b6176c9ce0cf1dc10e376c9d740d/src/models/tokenizer/tokenizer.py#L50-L55
+
+        # Codebook loss. Notes:
+        # - beta position is different from taming and identical to original VQVAE paper
+        # - VQVAE uses 0.25 by default
+        beta = 1.0
+        commitment_loss = (z.detach() - z_quantized).pow(2).mean() + beta * (z - z_quantized.detach()).pow(2).mean()
+        reconstruction_loss = torch.abs(observations - reconstructions).mean()
+        perceptual_loss = torch.mean(self.lpips(observations, reconstructions))
+
+
+https://openreview.net/pdf?id=o8IDoZggqO
+> We follow DreamerV3 in using discrete regression with two-hot targets and symlog scaling for rewards prediction (Bellemare et al., 2017; Imani & White,2018).
+
+
+
+> SqrtTransform Using two-hot discrete regression with the asymmetric square root transformation intro- duced by R2D221 and used in MuZero34
+https://arxiv.org/pdf/2301.04104v1.pdf
+- R2D2 https://openreview.net/forum?id=r1lyTjAqYX
+
+> The representations are sampled from a vector of softmax distributions and we take straight-through gradients through the sampling step
+- "sampled from a vector of softmax distributions"? I would like to see psudocode. I guess it just uses the distributions baked into torch fd.MultivariateNormalDiag(mean, std)
+> To train the critic, we symlog transform the targets Rλ t and then twohot encode them into a soft label for the softmax distribution produced by the critic. Twohot encoding is a generalization of onehot encoding to continuous values. It produces a vector of length |B| where all elements are 0 except for the two entries closest to the encoded continuous number, at positions k and k + 1. These two entries sum up to 1, with more weight given to the entry that is closer to the enco
+
+
+https://arxiv.org/pdf/2301.04104v1.pdf
+
+> the world model encodes sensory inputs into a discrete representation zt t
+
+cal.s.mcdougall@gmail.com
+
+dictionary learning
+
+- experiment I added amazon, and it doubled the training data, lets see if I get above 80% acc... I was getting ~75%
+
+
+https://www.alignmentforum.org/posts/F4iogK5xdNd7jDNyw/comparing-anthropic-s-dictionary-learning-to-ours
+> Size of training set: We trained our autoencoders for 10M tokens. Anthropic trained theirs for much longer, 8B tokens.
+Wow that's a lot. If I want to focus on just lying, I might need to focus on not reconstruction the whole state...
+
+
+## Best dreamer v3 repo?
+
+
+- https://github.dev/kc-ml2/SimpleDreamer oh it's dreamer 1 meh
+- https://github.dev/Eclectic-Sheep/sheeprl/blob/52f49be5971c5753e18bdf328d3035334fe688f1/sheeprl/algos/dreamer_v3/agent.py#L31
+
+
+    symlog is simple `torch.sign(x) * torch.log(1 + torch.abs(x))`
+
+# 2023-12-09 11:34:11
+
+Questions:
+- understand HALOs https://twitter.com/ethayarajh/status/1732837520784957476 https://github.com/ContextualAI/HALOs
+  - so it's just DPO with a differen't activation function on the reward, and notably it can use reward text instead of ranked pairs, letting you skip SFT. In a way it's just SFT?
+ - [ ] discrete states, just look up QVAE?
+   - [ ] hmm some use a categorical, and the gumbel reparam trick for end to end backprop
+   - [ ] some use VQ-VAE which I haven't looked at before but look promising. But I want to!
+ - [ ] does my pcr probe work ok? how to debug? I guess I need to check acc from it for a start
+ - [ ] does my conv vae work? maybe I need transposed conv blocks?
+     - perhaps just use https://github.com/ctallec/world-models/blob/master/models/vae.py#L10
+     - perhaps I need to focus on important features? Or on a task?
+       - e.g. if doing inference on the reconstructed parts, can I get the same output? (RAM heavy)
+       - if just apply an importance multipier
+
+
+
+```py
+QVAE psuedocode
+```

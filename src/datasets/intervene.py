@@ -67,6 +67,7 @@ def create_cache_interventions(model, tokenizer, cfg, N_fit_examples=20, batch_s
         
         train_labels = np.array(dataset_fit['label_true'])
         if get_negative:
+            # FIXME: does this work with PCA, since it's directionless
             train_labels = -1 * train_labels
         rep_reading_pipeline = pipeline("rep-reading", model=model, tokenizer=tokenizer)
         honesty_rep_reader = rep_reading_pipeline.get_directions(
