@@ -71,15 +71,15 @@ class RepReader(ABC):
 
         if self.needs_hiddens and hidden_states is not None and len(hidden_states) > 0:
             for layer in hidden_layers:    
-                assert hidden_states[layer].shape[0] == 2 * len(train_choices), f"Shape mismatch between hidden states ({hidden_states[layer].shape[0]}) and labels ({len(train_choices)})"
+                assert hidden_states[layer].shape[0] == len(train_choices), f"Shape mismatch between hidden states ({hidden_states[layer].shape[0]}) and labels ({len(train_choices)})"
                 
                 signs[layer] = []
                 for component_index in range(self.n_components):
                     transformed_hidden_states = project_onto_direction(hidden_states[layer], self.directions[layer][component_index])
                     projected_scores = [transformed_hidden_states[i:i+2] for i in range(0, len(transformed_hidden_states), 2)]
 
-                    outputs_min = [1 if min(o) == o[label] else 0 for o, label in zip(projected_scores, train_choices)]
-                    outputs_max = [1 if max(o) == o[label] else 0 for o, label in zip(projected_scores, train_choices)]
+                    outputs_min = [1 if min(o) == o[int(label)] else 0 for o, label in zip(projected_scores, train_choices)]
+                    outputs_max = [1 if max(o) == o[int(label)] else 0 for o, label in zip(projected_scores, train_choices)]
                     
                     signs[layer].append(-1 if np.mean(outputs_min) > np.mean(outputs_max) else 1)
         else:
@@ -188,6 +188,8 @@ class ClusterMeanRepReader(RepReader):
         super().__init__()
 
     def get_rep_directions(self, model, tokenizer, hidden_states, hidden_layers, **kwargs):
+
+        # see also https://github.com/likenneth/honest_llama/blob/207bb14b2c005e0593487cca8d22e072cbcb987b/utils.py#L730
 
         # train labels is necessary to differentiate between different classes
         train_choices = kwargs['train_choices'] if 'train_choices' in kwargs else None

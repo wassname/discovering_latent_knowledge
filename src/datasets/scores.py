@@ -48,8 +48,8 @@ def choice2id(tokenizer, c: str, whitespace_first=False) -> List[int]:
     
     # Note some tokenizers differentiate between "yes", "\nyes" and " yes", and ideally we want all! 
     ids2 = [
-        tokenizer(f' {c}', add_special_tokens=False)["input_ids"][1],
-        tokenizer(f'\n{c}', add_special_tokens=False)["input_ids"][2],
+        tokenizer(f' {c}', add_special_tokens=False)["input_ids"][-1],
+        tokenizer(f'\n{c}', add_special_tokens=False)["input_ids"][-1],
         tokenizer(f'{c}', add_special_tokens=False)["input_ids"][0],
     ]
     ids = list(set(ids2))

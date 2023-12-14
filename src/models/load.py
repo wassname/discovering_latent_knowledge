@@ -10,6 +10,7 @@ import torch
 from src.datasets.dropout import check_for_dropout
 from loguru import logger
 from typing import Tuple
+from auto_gptq import AutoGPTQForCausalLM, BaseQuantizeConfig
 
 def verbose_change_param(tokenizer, path, after):
     
@@ -20,7 +21,7 @@ def verbose_change_param(tokenizer, path, after):
     return tokenizer
 
 
-def load_model(model_repo = "TheBloke/WizardCoder-Python-13B-V1.0-GPTQ") -> Tuple[AutoModelForCausalLM, PreTrainedTokenizerBase]:
+def load_model(model_repo =  "microsoft/phi-2") -> Tuple[AutoModelForCausalLM, PreTrainedTokenizerBase]:
     """
     A uncensored and large coding ones might be best for lying.
     
@@ -30,10 +31,12 @@ def load_model(model_repo = "TheBloke/WizardCoder-Python-13B-V1.0-GPTQ") -> Tupl
     model_options = dict(
         device_map="auto",
         torch_dtype=torch.float16, 
+        # load_in_8bit=True,
+        trust_remote_code=True,
     )
 
-    config = AutoConfig.from_pretrained(model_repo, use_cache=False)
-    verbose_change_param(config, 'use_cache', False)
+    config = AutoConfig.from_pretrained(model_repo, trust_remote_code=True,)
+    # verbose_change_param(config, 'use_cache', False)
     
     tokenizer = AutoTokenizer.from_pretrained(model_repo, use_fast=True, legacy=False)
     verbose_change_param(tokenizer, 'pad_token_id', 0)
@@ -41,6 +44,7 @@ def load_model(model_repo = "TheBloke/WizardCoder-Python-13B-V1.0-GPTQ") -> Tupl
     verbose_change_param(tokenizer, 'truncation_side', 'left')
     
     model = AutoModelForCausalLM.from_pretrained(model_repo, config=config, 
+        # gptq_config=gptq_config,
                                                  **model_options)
 
     return model, tokenizer

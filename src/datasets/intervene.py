@@ -57,7 +57,7 @@ def create_cache_interventions(model, tokenizer, cfg, N_fit_examples=20, batch_s
     tokenizer_args=dict(padding="max_length", max_length=cfg.max_length, truncation=True, add_special_tokens=True)
     
     model_name = cfg.model.replace('/', '-')
-    intervention_f = root_folder / 'data' / 'interventions' / f'{model_name}_{"-" if get_negative else "+"}.pkl'
+    intervention_f = root_folder / 'data' / 'interventions' / f'{model_name}_{"-" if get_negative else "+"}_{direction_method}.pkl'
     intervention_f.parent.mkdir(exist_ok=True, parents=True)
     if not intervention_f.exists():        
         

@@ -35,6 +35,8 @@ TEMPLATES_FOLDER_PATH = Path(__file__).parent / "templates"
 def load_prompt_structure(prompt_format='llama2'):
     # for use with https://huggingface.co/docs/transformers/main/chat_templating is the tokenizer doesn't include it
     f = TEMPLATES_FOLDER_PATH  / "prompt_formats" / f"{prompt_format}.jinja2"
+    if not f.exists():
+        raise FileNotFoundError(f"Could not find prompt format {prompt_format} at {f}")
     return f.open().read()
 
 
@@ -296,7 +298,7 @@ def _convert_to_prompts(
 
 
 
-def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int, prompt_format:str, split_type:str="train", seed=42, num_shots=1, max_length=999) -> Dataset:
+def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int, prompt_format:str = None, split_type:str="train", seed=42, num_shots=1, max_length=999) -> Dataset:
     """load a preprocessed dataset of tokens."""
     ds_prompts = Dataset.from_generator(
         load_prompts,
@@ -312,7 +314,7 @@ def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int
     )
     
     
-    if tokenizer.chat_template is None:
+    if prompt_format:
         tokenizer.chat_template = load_prompt_structure(prompt_format=prompt_format)
 
     # ## Format prompts

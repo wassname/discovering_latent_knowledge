@@ -138,10 +138,10 @@ class RepReadingPipeline(Pipeline):
             
             # get differences between pairs
             relative_hidden_states = {k: np.copy(v) for k, v in hidden_states.items()}
-            for layer in hidden_layers:
+            for layer in hidden_layers[1:]:
                 for _ in range(n_difference):
-                    # TODO: check this, it's even - odd? on what dimension?
-                    relative_hidden_states[layer] = relative_hidden_states[layer][::2] - relative_hidden_states[layer][1::2]
+                    # FIXME: this is wrong, it's skipping batches...
+                    relative_hidden_states[layer] = relative_hidden_states[layer] - relative_hidden_states[layer-1]
 
 		# get the directions
         direction_finder.directions = direction_finder.get_rep_directions(

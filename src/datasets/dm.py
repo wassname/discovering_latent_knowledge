@@ -67,6 +67,7 @@ class imdbHSDataModule(pl.LightningDataModule):
             hs = hs.diff(1, axis=1) # this makes it the residual between layers
         if self.skip_layers:
             hs = hs[:, self.skip_layers:] # drop the first 10 layers to prevent overfitting?
+        del hs
         self.hs0 = hs[..., 0]
         self.hs1 = hs[..., 1]
         

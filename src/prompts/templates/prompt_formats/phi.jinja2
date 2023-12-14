@@ -1,0 +1,2 @@
+{# https://huggingface.co/microsoft/phi-2 #}
+{% for message in messages %}{% if message['role'] == 'user' %}{{ 'Instruct: ' + message['content'] + ' Output: ' }}{% elif message['role'] == 'assistant'%}{{ message['content'] + ' ' }}{% elif message['role'] == 'system'%}{{ 'System: ' + message['content'] + ' ' }}{% else %}{{ raise_exception('Only user and assistant roles are supported!')}}{% endif %}{% endfor %}

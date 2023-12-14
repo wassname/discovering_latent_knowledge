@@ -1515,7 +1515,7 @@ counterfactuals?
 - [x] what about nonlinear? nope
 
 Next
-- [ ] with noise on embeddings? this would allow large models agian. I'm really struggling with these small models!?
+- [ ] with noise on embeddings? this would allow large models agian. GI'm really struggling with these small models!?
 
 # 2023-09-22 13:36:27
 
@@ -1858,13 +1858,9 @@ QC
 
 - [x] I have poor choice coverag however
 maybe I should just use the huggingface chat template? https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1 
-
-
 - [ ] Also I may be intervening to much, as I get nonsensicle answers. I need to add the intervention QC!
-
-- [x] Why does wizard-vicuna not work... it's because of the stupid <s> token I think. It wasn't trained with it and it drops context
-
-- [x] Oh it looks like my few shots might be wrong?? - fixes
+- [x] Why does wizard-vicuna not work... it's because of the stupid `<`s`>` token I think. It wasn't trained with it and it drops context
+- [x] Oh it looks like my few shots might be wrong? - fixes
 
 # 2023-10-28 12:33:27
 
@@ -1940,11 +1936,12 @@ Right now I'm using pipelines that do an intervention.
 
 # Running
 
-```sh
-python notebooks/make_dataset2.py --max_examples 1720 220 --datasets imdb glue:qnli super_glue:boolq 
+~~~sh
+python notebooks/make_dataset2.py --max_examples 1720 220 --datasets imdb glue:qnli super_glue:boolq
+~~~
 
-```
-an in intervene.py/create_cache_interventions we get the activations that are used to intervent and get a pair of hidden states
+
+an in intervene.py/create_cache_interventions we get the activations that are used to intervene and get a pair of hidden states
 - rep_reading_pipeline.get_directions which uses PCA to get an intervention
 
 
@@ -2072,20 +2069,75 @@ Wow that's a lot. If I want to focus on just lying, I might need to focus on not
 # 2023-12-09 11:34:11
 
 Questions:
-- understand HALOs https://twitter.com/ethayarajh/status/1732837520784957476 https://github.com/ContextualAI/HALOs
+- [x] understand HALOs https://twitter.com/ethayarajh/status/1732837520784957476 https://github.com/ContextualAI/HALOs
   - so it's just DPO with a differen't activation function on the reward, and notably it can use reward text instead of ranked pairs, letting you skip SFT. In a way it's just SFT?
  - [ ] discrete states, just look up QVAE?
    - [ ] hmm some use a categorical, and the gumbel reparam trick for end to end backprop
    - [ ] some use VQ-VAE which I haven't looked at before but look promising. But I want to!
  - [ ] does my pcr probe work ok? how to debug? I guess I need to check acc from it for a start
- - [ ] does my conv vae work? maybe I need transposed conv blocks?
+ - [x] does my conv vae work? maybe I need transposed conv blocks? nah
      - perhaps just use https://github.com/ctallec/world-models/blob/master/models/vae.py#L10
      - perhaps I need to focus on important features? Or on a task?
        - e.g. if doing inference on the reconstructed parts, can I get the same output? (RAM heavy)
        - if just apply an importance multipier
+- [ ] see if the use og SGB here gives me usefull ideas https://www.lesswrong.com/posts/7fxusXdkMNmAhkAfc/finding-sparse-linear-connections-between-features-in-llms
 
 
 
-```py
-QVAE psuedocode
-```
+
+# 2023-12-13 21:51:56
+
+TODO:
+- [ ] mean diff prob
+  - [ ] **and check the probe!**
+- [ ] handle lots of HS
+  - For this we need to load as a stream
+- [ ] model that can lie?
+  - [ ] QLoRa
+  - [ ] Read Cognitive Dissonance: Why Do Language Model Outputs Disagree with Internal Representations of Truthfulness?
+  - [ ] better model? Phi-2?
+- [ ] variation on my probe.... maybe I don't need ranking if I have a VAE
+- [ ] maybe I can use my intervention as an importance matrix for the VAE loss?
+- [ ] maybe I can do that codebook VAE? How big?
+
+OK I can't load all my hs into mem, that's not ideal....
+
+and I tried the mean diff intervention since eluther like it, but the truthfull llama one seems broken
+
+# probes!
+
+How to sanity check them?
+- how well can a linear probe do compared to random?
+
+So I'm using the ones from https://github.dev/andyzoujm/representation-engineering/tree/main/repe_eval/examples/decoder_repe_eval.ipynb but maybe I should use 
+- [Eleuther](https://github.com/EleutherAI/concept-erasure) 
+  - huh this is weird. it does sgd on action. has a whitenessing matrix
+  - > Intuitively, LEACE de-means and whitens x, projects onto the subspace responsible for correlations between X and Z, then unwhitens the result. Finally, it subtracts this value from x, thereby surgically removing the linearly available information about Z.
+- or [honestllama](https://github.com/likenneth/honest_llama/blob/master/utils.py#L730)
+  - > We compare three different directions for the ITI activation shift. Probe Weight Direction is the direction found by linear probing in subsection 3.2. Intervening in this direction is equivalent to doing one gradient descent step on the head activation to maximize its probability of being predicted as truthful. Mass Mean Shift works by first calculating the average of truthful and false activations and then using the vector pointing from the false mean to the truthful mean for intervention. As a baseline, we also apply the Contrast-Consistent Search (CCS) technique, where the direction is found while only knowing pairwise information of internal activations (Burns et al., 2022).
+  - ![Honest LLAMA Table 3](img/2023-12-14-11-51-32.png)
+    - **Mean Mass shift was the best by far** (PCA not considered)
+  - For magnitude they get `direction = direction / np.linalg.norm(direction)` and `std(activations @ directions)` for each head
+  - [center of mass directions](https://github.dev/likenneth/honest_llama/blob/207bb14b2c005e0593487cca8d22e072cbcb987b/utils.py#L730)
+  - use_random_dir
+  - [linear regression.coef_](https://github.dev/likenneth/honest_llama/blob/207bb14b2c005e0593487cca8d22e072cbcb987b/utils.py#L644) which is m from `mx+c`
+- or the geometry-of-truth https://github.com/saprmarks/geometry-of-truth/blob/main/interventions.ipynb
+  - LRProbe - trained linear layer with sigmoid. Directon from the weight
+  - MMProbe - mass
+    - `direction = pos_mean - neg_mean`
+    - `covariance = centered_data.t() @ centered_data / acts.shape[0]`
+  - CCSProbe: this must be the clustering one from constrastive clustering, trained with Adam
+- or representation engineering
+  - > Among these models, both unsupervised methods such as PCA and K-Means, as well as the supervised technique of Mean Difference, consistently exhibit robust overall performance
+  - magnitudes?
+
+
+## datasets
+
+From honest_llama
+- tqa_mc2 (multi choice)
+- tca_gen (generation)
+- tqa_gen_end_q (generation)
+
+
+Looks like I need hidden states
