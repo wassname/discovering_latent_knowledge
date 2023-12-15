@@ -102,7 +102,7 @@ if TEST:
 # %%
 
 # Fit an intervention
-# N_fit_examples = 60
+# cfg.intervention_fit_examples = 60
 rep_token = -1
 
 honesty_rep_reader1 = create_cache_interventions(
@@ -115,16 +115,16 @@ honesty_rep_reader1 = create_cache_interventions(
     rep_token=rep_token,
 )
 
-honesty_rep_reader2 = create_cache_interventions(
-    model,
-    tokenizer,
-    cfg,
-    direction_method=cfg.intervention_direction_method,
-    N_fit_examples=cfg.intervention_fit_examples,
-    batch_size=batch_size,
-    rep_token=rep_token,
-    get_negative=True,
-)
+# honesty_rep_reader2 = create_cache_interventions(
+#     model,
+#     tokenizer,
+#     cfg,
+#     direction_method=cfg.intervention_direction_method,
+#     N_fit_examples=cfg.intervention_fit_examples,
+#     batch_size=batch_size,
+#     rep_token=rep_token,
+#     get_negative=True,
+# )
 
 hidden_layers = sorted(honesty_rep_reader1.directions.keys())
 hidden_layers
@@ -151,59 +151,26 @@ rep_control_pipeline2 = pipeline(
     tokenizer=tokenizer,
     layers=hidden_layers,
     max_length=cfg.max_length,
+    layer_name_tmpl=cfg.intervention_layer_name_template
 )
 rep_control_pipeline2
 
 
 # %%
 from src.datasets.intervene import get_activations_from_reader
+from src.datasets.intervene import test_intervention_quality
 
-activations1 = get_activations_from_reader(
+activations = get_activations_from_reader(
     honesty_rep_reader1, hidden_layers, dtype=model.dtype, device=model.device
 )
-activations2 = get_activations_from_reader(
-    honesty_rep_reader2, hidden_layers, dtype=model.dtype, device=model.device
-)
-
-# %%
-
-
-# %%
-if TEST:
-    # unit test pipeline: with multiple input types: single, list, generator, dataset
-    ## single
-    input_types = {
-        "single": dataset_train[0],
-        "list": [dataset_train[i] for i in range(3)],
-        "generator": iter(dataset_train.select(range(3))),
-        "dataset": dataset_train.select(range(3)).to_iterable_dataset(),
-    }
-    for name, ds in input_types.items():
-        print(f"==== {name} ====")
-        r = rep_control_pipeline2(ds, activations=activations1, batch_size=2)
-        if isinstance(r, dict):
-            r = [r]
-        elif isinstance(r, list):
-            pass
-        else:
-            r = list(r)
-        print(f"Control: {len(r)}")
-        print(r[0]["input_ids"].shape)
+# activations2 = get_activations_from_reader(
+#     honesty_rep_reader2, hidden_layers, dtype=model.dtype, device=model.device
+# )
 
 
 # %%
 # test intervention quality
 # TODO perhaps move this to intervention create/load/cache
-from src.datasets.intervene import test_intervention_quality
-
-if TEST:
-    test_intervention_quality(
-        dataset_train, activations1, model, rep_control_pipeline2, batch_size=batch_size
-    )
-
-    test_intervention_quality(
-        dataset_train, activations2, model, rep_control_pipeline2, batch_size=batch_size
-    )
 
 # %%
 
@@ -288,8 +255,8 @@ if cfg.disable_ds_cache:
 
 from src.datasets.load import ds2df, load_ds, get_ds_name, filter_ds_to_known, qc_ds
 
-activations = [activations1, activations2]
 for ds_name in cfg.datasets:
+    N_train, N_test = cfg.max_examples
     # load dataset
     N = sum(cfg.max_examples)
     ds_tokens = load_preproc_dataset(
@@ -302,19 +269,22 @@ for ds_name in cfg.datasets:
         prompt_format=cfg.prompt_format,
     )
 
-    N_train_split = (len(ds_tokens) - N_fit_examples) // 2
+    assert len(ds_tokens) >= N, f"dataset is too small as {len(ds_tokens)}< {N}"
 
-    N_train_split = cfg.max_examples[0]
+    # N_train_split = (len(ds_tokens) - cfg.intervention_fit_examples) // 2
+    assert cfg.intervention_fit_examples < N_train
+    N_train_split = N_train - cfg.intervention_fit_examples
+
 
     # split the dataset, it's preshuffled
-    dataset_fit = ds_tokens.select(range(N_fit_examples))
-    dataset_train = ds_tokens.select(range(N_fit_examples, N_train_split))
+    dataset_fit = ds_tokens.select(range(cfg.intervention_fit_examples))
+    dataset_train = ds_tokens.select(range(cfg.intervention_fit_examples, N_train_split))
     dataset_test = ds_tokens.select(range(N_train_split, len(ds_tokens)))
     assert len(dataset_train) > 3, f"dataset_train is too small {len(dataset_train)}"
     assert len(dataset_test) > 3
 
     # FIXME:
-    # test_intervention_quality(dataset_train)
+    test_intervention_quality(dataset_train, activations, model, rep_control_pipeline2, batch_size=batch_size, ds_name=ds_name)
 
     ds1, f = create_hs_ds(
         ds_name,
@@ -340,6 +310,7 @@ for ds_name in cfg.datasets:
     try:
         qc_ds(ds1)
     except:
+        raise
         logger.exception(f"QC failed for {ds_name}")
 
 # TODO add qc

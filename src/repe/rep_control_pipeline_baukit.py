@@ -83,14 +83,15 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         inputs["attention_mask"] = torch.tensor(inputs['attention_mask'], dtype=torch.bool, device=self.model.device)
         return inputs
 
-    def _forward(self, inputs: dict, activations: List[Dict[str, float]]) -> ModelOutput:
+    def _forward(self, inputs: dict, activations: Dict[str, float]) -> ModelOutput:
         assert inputs['input_ids'].ndim == 2, f"expected input_ids to be (batch, seq), got {inputs['input_ids'].shape}"
 
         # make intervention functions
-        layers_names = [self.layer_name_tmpl.format(i) for i in activations[0].keys()]           
+        layers_names = [self.layer_name_tmpl.format(i) for i in activations.keys()]           
         # FIXME: [0] is positive, [1] is negative. We can also multiply by -1, 0, or 1     
-        activations_pos_i = Activations({self.layer_name_tmpl.format(k):v for k,v in activations[1].items()})
-        activations_neut = Activations({self.layer_name_tmpl.format(k):0. * v for k,v in activations[0].items()})
+        # FIXME clean this up, we are only using the first one, so it's confusing. either pass 1, or use both so the logic is in one place only
+        activations_pos_i = Activations({self.layer_name_tmpl.format(k):v for k,v in activations.items()})
+        activations_neut = Activations({self.layer_name_tmpl.format(k):0. * v for k,v in activations.items()})
         edit_fn_pos = partial(intervention_meta_fn2, activations=activations_pos_i)
         edit_fn_neu = partial(intervention_meta_fn2, activations=activations_neut)
         

@@ -2122,8 +2122,8 @@ So I'm using the ones from https://github.dev/andyzoujm/representation-engineeri
   - use_random_dir
   - [linear regression.coef_](https://github.dev/likenneth/honest_llama/blob/207bb14b2c005e0593487cca8d22e072cbcb987b/utils.py#L644) which is m from `mx+c`
 - or the geometry-of-truth https://github.com/saprmarks/geometry-of-truth/blob/main/interventions.ipynb
-  - LRProbe - trained linear layer with sigmoid. Directon from the weight
-  - MMProbe - mass
+  - [LRProbe](https://github.com/saprmarks/geometry-of-truth/blob/91b223224699754efe83bbd3cae04d434dda0760/probes.py#L53) - trained linear layer with sigmoid. Directon from the weight
+  - . - mass
     - `direction = pos_mean - neg_mean`
     - `covariance = centered_data.t() @ centered_data / acts.shape[0]`
   - CCSProbe: this must be the clustering one from constrastive clustering, trained with Adam
@@ -2141,3 +2141,14 @@ From honest_llama
 
 
 Looks like I need hidden states
+
+
+Hmm the way we apply mean direction... doesn't make sense! it's still for PCA... I might want to scrap it for something ismpler. It does look like my intervention it too big.
+
+In particular our intervention result in junk.... so no wonder there is nothing to learn lol
+
+
+# Invervention choices direction and magnitude
+
+https://github.com/saprmarks/geometry-of-truth/blob/91b223224699754efe83bbd3cae04d434dda0760/probes.py#L53
+- 

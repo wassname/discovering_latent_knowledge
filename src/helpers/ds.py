@@ -17,8 +17,8 @@ def clear_mem():
 
 
 def shuffle_dataset_by(ds, column):
-    ds_tokens = ds.filter(lambda r: r["truncated"] == False)
-    example_i = np.array(ds_tokens["example_i"])
+    # ds_tokens = ds.filter(lambda r: r["truncated"] == False)
+    example_i = np.array(ds["example_i"])
     uniq_example_i = np.array(sorted(set(example_i)))
     shuffled_indices = np.random.permutation(uniq_example_i)
     index = np.arange(len(example_i))

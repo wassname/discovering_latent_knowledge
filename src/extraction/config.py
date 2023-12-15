@@ -20,7 +20,7 @@ class ExtractConfig(Serializable):
     # model: str = "TheBloke/Llama-2-13B-chat-GPTQ"
     """HF model string identifying the language model to extract hidden states from."""
 
-    batch_size: int = 6
+    batch_size: int = 5
 
     prompt_format: str | None = 'phi'
     """if the tokenizer does not have a chat template you can set a custom one. see src/prompts/templates/prompt_formats/readme.md."""
@@ -28,11 +28,11 @@ class ExtractConfig(Serializable):
     data_dirs: tuple[str, ...] = ()
     """Directory to use for caching the hiddens. Defaults to `HF_DATASETS_CACHE`."""
 
-    max_examples: tuple[int, int] = (100, 100)
+    max_examples: tuple[int, int] = (1000, 200)
     """Maximum number of examples to use from each split of the dataset."""
     
 
-    num_shots: int = 1
+    num_shots: int = 2
     """Number of examples for few-shot prompts. If zero, prompts are zero-shot."""
 
     num_variants: int = -1
@@ -54,7 +54,7 @@ class ExtractConfig(Serializable):
     template_path: str | None = None
     """Path to pass into `DatasetTemplates`. By default we use the dataset name."""
     
-    max_length: int | None = 700
+    max_length: int | None = 1000
     """Maximum length of the input sequence passed to the tokenize encoder function"""
     
     disable_ds_cache: bool = False
@@ -63,7 +63,10 @@ class ExtractConfig(Serializable):
     intervention_direction_method: str = "cluster_mean"
     """"how to intervent: pca, cluster_mean, random"""
 
-    intervention_fit_examples: int = 60
+    intervention_fit_examples: int = 200
     """how many example to use for intervention calibration"""
+
+    intervention_layer_name_template: str = "transformer.h.{}"
+    """path to model layers"""
 
 

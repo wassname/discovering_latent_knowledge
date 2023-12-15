@@ -7,7 +7,8 @@ from collections import Counter
 from random import Random
 from typing import Any, Iterator, Literal, List, Dict
 from pathlib import Path
-
+import datasets
+import json
 from jinja2 import TemplateError
 from datasets import ClassLabel, Dataset, Value, load_dataset
 import yaml
@@ -299,7 +300,6 @@ def _convert_to_prompts(
 
 
 def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int, prompt_format:str = None, split_type:str="train", seed=42, num_shots=1, max_length=999) -> Dataset:
-    """load a preprocessed dataset of tokens."""
     ds_prompts = Dataset.from_generator(
         load_prompts,
         gen_kwargs=dict(
@@ -323,7 +323,7 @@ def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int
     # In this case we use multishot examples from train, and use the test set to generated the hidden states dataset. We will test generalisation on a whole new dataset.
     
     def format_prompt(tokenizer, messages):
-        # TODO if not chat template is present, load it from structure.yaml onto tokenizer
+        # if not chat template is present, load it from structure.yaml onto tokenizer
         # https://huggingface.co/docs/transformers/main/chat_templating
         try:
             q = tokenizer.apply_chat_template(messages, tokenize=False)
@@ -350,6 +350,7 @@ def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int
             desc='tokenize',
         )
         .map(lambda r: {"truncated": np.sum(r["attention_mask"], 0)==max_length}, desc='truncated')
+        .map(lambda r: {"length": np.sum(r["attention_mask"], 0)}, desc='truncated')
         .map(
             lambda r: {"prompt_truncated": tokenizer.batch_decode(r["input_ids"])},
             batched=True,
@@ -358,14 +359,23 @@ def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int
         .map(lambda r: {'choice_ids': row_choice_ids(r, tokenizer)}, desc='choice_ids')
     )
     
-    
+    b4 = ds_tokens.num_rows
+    # print('num_rows', ds_tokens.num_rows)
+    truncation_rate = np.mean(ds_tokens['truncated'])
+    print(np.histogram(ds_tokens['length']))
+    assert truncation_rate<0.5, f"truncation rate is too high {truncation_rate}. Try a longer max_length than {max_length}"
+    logger.info(f"truncation rate: {truncation_rate} on {ds_name}")
+    ds_tokens = ds_tokens.filter(lambda r: r["truncated"] == False)
+
+    # print('num_rows', ds_tokens.num_rows)
     ds_tokens = shuffle_dataset_by(ds_tokens, 'example_i')
-    print('num_rows', ds_tokens.num_rows)
+    # print('num_rows', ds_tokens.num_rows)
     
     # ## Filter out truncated examples
     ds_tokens = ds_tokens.filter(lambda r: not r['truncated'])
-    print('num_rows (after filtering out truncated rows)', ds_tokens.num_rows)
+    print(f'num_rows (after filtering out truncated rows) {b4}=>{ds_tokens.num_rows}')
     assert len(ds_tokens), f'No examples left after filtering out truncated rows, try a longer max_length than {max_length}'
+    assert len(ds_tokens)>=N, f'Few {len(ds_tokens)}<{N} examples left after filtering out truncated rows, try a longer max_length than {max_length}'
     if len(ds_tokens)>N:
         ds_tokens = ds_tokens.select(range(N))
     return ds_tokens

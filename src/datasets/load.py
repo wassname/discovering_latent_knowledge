@@ -77,6 +77,15 @@ def qc_ds(ds):
     df = ds2df(ds)
     ds_name = get_ds_name(ds)
     print('QC: ds', ds_name)
+
+    # view prompt example
+    r = ds[0]
+    print('prompt example:')
+    print(r['input_truncated'], end="")
+    print(r['text_ans'])
+    
+    print('='*80)
+    print()
     
     # check llm accuracy
     d = df.query('instructed_to_lie==False')
@@ -104,13 +113,4 @@ def qc_ds(ds):
     # check choice coverage
     mean_prob = np.sum(ds['choice_probs'], 1).mean()
     print(f"\tchoice_cov=\t{mean_prob:2.2%} - Our choices accounted for a mean probability of this")
-    assert mean_prob>0.1, "neither of the available choice very unlikely :(, try debuging your templates. Check: using the correct prompt, the whitespace is correct, the correct eos_tokens (if any)"
-    
-    # view prompt example
-    r = ds[0]
-    print('prompt example:')
-    print(r['input_truncated'], end="")
-    print(r['text_ans'])
-    
-    print('='*80)
-    print()
+    assert mean_prob>0.1, "neither of the available choice very likely :(, try debuging your templates. Check: using the correct prompt, the whitespace is correct, the correct eos_tokens (if any)"
