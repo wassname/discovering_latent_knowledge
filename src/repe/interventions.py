@@ -1,11 +1,14 @@
 import torch as t
 from typing import Dict, List
 from jaxtyping import Float
-from torch import Tensor
+from torch import Tensor, nn
 
-class Intervention(t.nn.Module):
+
+class Intervention(nn.Module):
     def __init__(self):
         super().__init__()
+        self.norm_direction = None
+        self.direction = None
 
     def forward(self, x, iid=None):
         raise NotImplementedError
@@ -13,16 +16,22 @@ class Intervention(t.nn.Module):
     def pred(self, x, iid=None):
         raise NotImplementedError
     
-    def edit(self, x):
+    def _norm_dir(self, acts, labels):
         direction = self.direction
         true_acts, false_acts = acts[labels==1], acts[labels==0]
         true_mean, false_mean = true_acts.mean(0), false_acts.mean(0)
         direction = direction / direction.norm()
         diff = (true_mean - false_mean) @ direction
-        direction = diff * direction
+        self.norm_direction = t.nn.Parameter(diff * direction, requires_grad=False)
+    
+    def edit(self, x, alpha=1):
+        self.to(x.device).to(x.dtype)
 
-        x[0][:,-1, :] += direction * alpha
-        return self(x)
+        # how do we actually edit? here is how two project do it
+        # https://github.com/saprmarks/geometry-of-truth/blob/91b223224699754efe83bbd3cae04d434dda0760/interventions.ipynb
+        # and https://github.com/likenneth/honest_llama/blob/207bb14b2c005e0593487cca8d22e072cbcb987b/utils.py#L697
+        x[:, -1, :] += self.norm_direction[None, :] * alpha
+        return x
 
     @staticmethod
     def from_data(acts: Dict[int, Float[Tensor, "batch neurons"]], labels: List[bool], **kwargs) -> t.nn.Module:
@@ -51,7 +60,7 @@ class LayerInterventions(t.nn.Module):
         return {k: v.direction for k, v in self.interventions.items()}
 
 
-class MMProbe(t.nn.Module):
+class MMProbe(Intervention):
     """
     Mean Mass Probe
 
@@ -87,12 +96,12 @@ class MMProbe(t.nn.Module):
         covariance = centered_data.t() @ centered_data / acts.shape[0]
         
         probe = MMProbe(direction, covariance=covariance).to(device)
-
+        probe._norm_dir(acts, labels)
         return probe
     
 
 
-class COMProbe(t.nn.Module):
+class COMProbe(Intervention):
     """
     Center of Mass Probe
 
@@ -125,12 +134,13 @@ class COMProbe(t.nn.Module):
         proj_val_std = t.std(proj_vals)
         
         probe = COMProbe(direction, proj_val_std=proj_val_std).to(device)
+        probe._norm_dir(acts, labels)
 
         return probe
     
 
 
-class LRProbe(t.nn.Module):
+class LRProbe(Intervention):
     """
     Linear regression probe
     From geometry-of-truth repo
@@ -159,6 +169,8 @@ class LRProbe(t.nn.Module):
             loss = t.nn.BCELoss()(probe(acts), labels)
             loss.backward()
             opt.step()
+
+        probe._norm_dir(acts, labels)
         
         return probe
 
@@ -175,7 +187,7 @@ def ccs_loss(probe, acts, neg_acts):
     return t.mean(consistency_losses + confidence_losses)
 
 
-class CCSProbe(t.nn.Module):
+class CCSProbe(Intervention):
     """
     Contrast-Consistent Search
     From geometry-of-truth repo
@@ -187,6 +199,7 @@ class CCSProbe(t.nn.Module):
             t.nn.Linear(d_in, 1, bias=False),
             t.nn.Sigmoid()
         )
+        
     
     def forward(self, x, iid=None):
         return self.net(x).squeeze(-1)
@@ -212,6 +225,7 @@ class CCSProbe(t.nn.Module):
             if acc < 0.5:
                 probe.net[0].weight.data *= -1
         
+        probe._norm_dir(acts, labels)
         return probe
 
     @property

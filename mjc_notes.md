@@ -2235,10 +2235,9 @@ direction = diff * direction
 output[0][:, intervention_idx, :] += direction * alpha
 ```
 
-# 2023-12-16 16:50:20
+# 2023-12-16 16:50:20 How do projects intervent
 
-OK I would like a sklearn like interface
-
-```py
-class Intervention(nn.Module):
-  def _
+- honestllama and geometry of truth do `activation + direction * std`
+- but in the representation engineering one, they use diff(hidden_states) to get std and direction. Then apply slightly differently? Still trying to work this out https://github.com/andyzoujm/representation-engineering 
+  - oh wait it looks like the same? https://github.com/wassname/representation-engineering/blob/acd14ab15f6d37710dd9a3b47caa2900ce5c2569/repe/rep_control_reading_vec.py#L64
+  - and manually https://github.com/wassname/representation-engineering/blob/acd14ab15f6d37710dd9a3b47caa2900ce5c2569/examples/honesty/honesty_control_TQA.ipynb
