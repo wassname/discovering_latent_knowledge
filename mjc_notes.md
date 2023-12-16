@@ -2241,3 +2241,17 @@ output[0][:, intervention_idx, :] += direction * alpha
 - but in the representation engineering one, they use diff(hidden_states) to get std and direction. Then apply slightly differently? Still trying to work this out https://github.com/andyzoujm/representation-engineering 
   - oh wait it looks like the same? https://github.com/wassname/representation-engineering/blob/acd14ab15f6d37710dd9a3b47caa2900ce5c2569/repe/rep_control_reading_vec.py#L64
   - and manually https://github.com/wassname/representation-engineering/blob/acd14ab15f6d37710dd9a3b47caa2900ce5c2569/examples/honesty/honesty_control_TQA.ipynb
+
+
+# 2023-12-16 21:06:50
+
+I need more small experiments I can verify
+
+Why do I need ranking AND SAE AND importance matrix AND intervention?
+
+Some haven't worked along: 
+- ranking (maybe because dropout doesnt give enougth variation? or the variation is useless), it needs intervention, but intervention might work on it's own. And then all ranking does it possibly help avoid overfitting!
+- intervention... it's hard to find a good one. It's either too little to matter or too much and the model is incoherent, meaning it's a implausible intervention. Plus all my interventions so far have been for the word true, not true or deception. 
+  - [ ] Try doing MMProbe with deception vs truth?
+  - [ ] Try SGD only on bias! trying to flip the probabilities on a large batch (can use grad accum)
+- SAE... no one has solved this. Maybe with an important matrix (which can come from an intervention)

@@ -24,7 +24,7 @@ class Intervention(nn.Module):
         diff = (true_mean - false_mean) @ direction
         self.norm_direction = t.nn.Parameter(diff * direction, requires_grad=False)
     
-    def edit(self, x, alpha=1):
+    def edit(self, x, alpha=0.25):
         self.to(x.device).to(x.dtype)
 
         # how do we actually edit? here is how two project do it

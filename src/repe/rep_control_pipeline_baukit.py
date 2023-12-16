@@ -33,7 +33,7 @@ def hacky_sanitize_outputs(o):
 def row_choice_ids(answer_choices, tokenizer):
     return choice2ids([c for c in answer_choices], tokenizer)
 
-def intervention_fn(outputs: torch.Tensor, layer_name: str, intervention: Intervention) -> torch.Tensor:
+def intervention_fn(outputs: torch.Tensor, layer_name: str, intervention: Intervention, alpha=0.25) -> torch.Tensor:
     """
     This adapts and intervention function for baukit Tracdict
 
@@ -48,10 +48,10 @@ def intervention_fn(outputs: torch.Tensor, layer_name: str, intervention: Interv
 
     # different transformer have different formats of layer returns
     if type(outputs) is tuple:
-        output0 = fn.edit(outputs[0]) 
+        output0 = fn.edit(outputs[0], alpha=alpha) 
         return (output0, *outputs[1:])
     elif type(outputs) is torch.Tensor:
-        return fn.edit(outputs)
+        return fn.edit(outputs, alpha=alpha)
     else:
         raise ValueError(f"layer outputs must be tuple or tensor, got {type(outputs)}")
 

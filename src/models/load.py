@@ -25,7 +25,7 @@ def verbose_change_param(tokenizer, path, after):
     return tokenizer
 
 
-def load_model(model_repo =  "microsoft/phi-2", pad_token_id=0) -> Tuple[AutoModelForCausalLM, PreTrainedTokenizerBase]:
+def load_model(model_repo =  "microsoft/phi-2", pad_token_id=0, disable_exllama=True) -> Tuple[AutoModelForCausalLM, PreTrainedTokenizerBase]:
     """
     A uncensored and large coding ones might be best for lying.
     
@@ -58,11 +58,9 @@ def load_model(model_repo =  "microsoft/phi-2", pad_token_id=0) -> Tuple[AutoMod
     model = AutoModelForCausalLM.from_pretrained(model_repo, config=config, 
                                                  **model_options)
     
-    try:
+    if disable_exllama:
         from auto_gptq import exllama_set_max_input_length
         model = exllama_set_max_input_length(model, max_input_length=5000)
-    except Exception as e:
-        logger.exception("could not set exllama max input length")
 
     return model, tokenizer
 
