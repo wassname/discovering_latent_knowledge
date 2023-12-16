@@ -102,28 +102,17 @@ if TEST:
 # %%
 
 # Fit an intervention
-# cfg.intervention_fit_examples = 60
-rep_token = -1
 
 honesty_rep_reader1 = create_cache_interventions(
     model,
     tokenizer,
     cfg,
-    direction_method=cfg.intervention_direction_method,
-    N_fit_examples=cfg.intervention_fit_examples,
-    batch_size=batch_size,
-    rep_token=rep_token,
 )
 
 # honesty_rep_reader2 = create_cache_interventions(
 #     model,
 #     tokenizer,
 #     cfg,
-#     direction_method=cfg.intervention_direction_method,
-#     N_fit_examples=cfg.intervention_fit_examples,
-#     batch_size=batch_size,
-#     rep_token=rep_token,
-#     get_negative=True,
 # )
 
 hidden_layers = sorted(honesty_rep_reader1.directions.keys())
