@@ -103,19 +103,13 @@ if TEST:
 
 # Fit an intervention
 
-honesty_rep_reader1 = create_cache_interventions(
+intervention = create_cache_interventions(
     model,
     tokenizer,
     cfg,
 )
 
-# honesty_rep_reader2 = create_cache_interventions(
-#     model,
-#     tokenizer,
-#     cfg,
-# )
-
-hidden_layers = sorted(honesty_rep_reader1.directions.keys())
+hidden_layers = sorted(intervention.direction.keys())
 hidden_layers
 
 
@@ -140,21 +134,15 @@ rep_control_pipeline2 = pipeline(
     tokenizer=tokenizer,
     layers=hidden_layers,
     max_length=cfg.max_length,
-    layer_name_tmpl=cfg.intervention_layer_name_template
 )
 rep_control_pipeline2
 
 
 # %%
-from src.datasets.intervene import get_activations_from_reader
+# from src.datasets.intervene import get_activations_from_reader
 from src.datasets.intervene import test_intervention_quality
 
-activations = get_activations_from_reader(
-    honesty_rep_reader1, hidden_layers, dtype=model.dtype, device=model.device
-)
-# activations2 = get_activations_from_reader(
-#     honesty_rep_reader2, hidden_layers, dtype=model.dtype, device=model.device
-# )
+
 
 
 # %%
@@ -168,7 +156,7 @@ def create_hs_ds(
     ds_name,
     ds_tokens,
     pipeline,
-    activations=None,
+    intervention=None,
     f=None,
     batch_size=2,
     split_type="train",
@@ -212,7 +200,7 @@ def create_hs_ds(
     # first we make the calibration dataset with no intervention
     gen_kwargs = dict(
         model_inputs=ds,
-        activations=activations,
+        intervention=intervention,
         batch_size=batch_size,
     )
 
@@ -273,7 +261,7 @@ for ds_name in cfg.datasets:
     assert len(dataset_test) > 3
 
     # FIXME:
-    test_intervention_quality(dataset_train, activations, model, rep_control_pipeline2, batch_size=batch_size, ds_name=ds_name)
+    test_intervention_quality(dataset_train, intervention, model, rep_control_pipeline2, batch_size=batch_size, ds_name=ds_name)
 
     ds1, f = create_hs_ds(
         ds_name,
@@ -282,7 +270,7 @@ for ds_name in cfg.datasets:
         split_type="train",
         debug=True,
         batch_size=batch_size,
-        activations=activations,
+        intervention=intervention,
     )
     clear_mem()
     ds1, f = create_hs_ds(
@@ -292,7 +280,7 @@ for ds_name in cfg.datasets:
         split_type="test",
         debug=True,
         batch_size=batch_size,
-        activations=activations,
+        intervention=intervention,
     )
     clear_mem()
 

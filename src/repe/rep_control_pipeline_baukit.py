@@ -1,3 +1,4 @@
+from hmac import new
 import re
 import torch
 from transformers.pipelines import (
@@ -13,10 +14,8 @@ from functools import partial
 from einops import rearrange
 from transformers.modeling_outputs import ModelOutput
 from src.datasets.scores import choice2ids, default_class2choices, logits2choice_probs2
-# from src.datasets.scores import scores2choice_probs
 from src.helpers.torch import clear_mem, detachcpu
-from src.datasets.intervene import intervention_meta_fn2, Activations
-
+from src.repe.interventions import Intervention
 
 
 def try_half(v):
@@ -35,29 +34,57 @@ def row_choice_ids(answer_choices, tokenizer):
     return choice2ids([c for c in answer_choices], tokenizer)
 
 
-# def split_outputs(o):
+def intervene(output, intervention) -> torch.Tensor:
+    """
+
+    https://github.com/saprmarks/geometry-of-truth/blob/91b223224699754efe83bbd3cae04d434dda0760/interventions.ipynb
+    """
+    alpha = -1
+    output[:, - 1, :] += intervention.direction * alpha
+    return output
+
+def intervention_fn(outputs: torch.Tensor, layer_name: str, intervention: Intervention) -> torch.Tensor:
+    """
+    This adapts and intervention function for baukit Tracdict
+
+    - honest_llama: https://github.com/likenneth/honest_llama/blob/e010f82bfbeaa4326cef8493b0dd5b8b14c6da67/validation/validate_2fold.py#L114
+    - baukit: https://github.com/davidbau/baukit/blob/main/baukit/nethook.py#L42C1-L45C56
+
+    Usage:
+        edit_output = partial(intervention_meta_fn2, activations=activations)
+        with TraceDict(model, layers_to_intervene, edit_output=edit_output) as ret:
+    """
+    fn = intervention.interventions[layer_name]
+
+    # different transformer have different formats of layer returns
+    if type(outputs) is tuple:
+        output0 = intervene(outputs[0], fn) 
+        return (output0, *outputs[1:])
+    elif type(outputs) is torch.Tensor:
+        return intervene(outputs, fn)
+    else:
+        raise ValueError(f"layer outputs must be tuple or tensor, got {type(outputs)}")
 
 
 class RepControlPipeline2(FeatureExtractionPipeline):
     """This version uses baukit."""
-    def __init__(self, model, tokenizer, max_length, layer_name_tmpl="model.layers.{}", **kwargs):
+    def __init__(self, model, tokenizer, max_length,  **kwargs):
         super().__init__(model=model, tokenizer=tokenizer, **kwargs)
         self.max_length = max_length
-        self.layer_name_tmpl = layer_name_tmpl
         
         # self.default_class2choiceids = choice2ids(default_class2choices, tokenizer)
 
     def __call__(self, model_inputs, **kwargs):
         return super().__call__(model_inputs, **kwargs)
     
-    def _sanitize_parameters(self, activations=None, truncation=None, tokenize_kwargs=None, return_tensors=None, **kwargs):
+    def _sanitize_parameters(self, intervention=None, truncation=None, tokenize_kwargs=None, return_tensors=None, **kwargs):
         """This processed the init params."""
         if tokenize_kwargs is None:
             tokenize_kwargs = {}
 
         preprocess_params = tokenize_kwargs
 
-        forward_params = {'activations': activations}
+        forward_params = {'intervention': intervention}
         
         postprocess_params = {}
         if return_tensors is not None:
@@ -83,17 +110,12 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         inputs["attention_mask"] = torch.tensor(inputs['attention_mask'], dtype=torch.bool, device=self.model.device)
         return inputs
 
-    def _forward(self, inputs: dict, activations: Dict[str, float]) -> ModelOutput:
+    def _forward(self, inputs: dict, intervention: Intervention) -> ModelOutput:
         assert inputs['input_ids'].ndim == 2, f"expected input_ids to be (batch, seq), got {inputs['input_ids'].shape}"
 
         # make intervention functions
-        layers_names = [self.layer_name_tmpl.format(i) for i in activations.keys()]           
-        # FIXME: [0] is positive, [1] is negative. We can also multiply by -1, 0, or 1     
-        # FIXME clean this up, we are only using the first one, so it's confusing. either pass 1, or use both so the logic is in one place only
-        activations_pos_i = Activations({self.layer_name_tmpl.format(k):v for k,v in activations.items()})
-        activations_neut = Activations({self.layer_name_tmpl.format(k):0. * v for k,v in activations.items()})
-        edit_fn_pos = partial(intervention_meta_fn2, activations=activations_pos_i)
-        edit_fn_neu = partial(intervention_meta_fn2, activations=activations_neut)
+        layers_names = list(intervention.interventions.keys())
+        edit_fn = partial(intervention_fn, intervention=intervention)
         
         self.model.eval()
         model_in = dict(
@@ -119,14 +141,11 @@ class RepControlPipeline2(FeatureExtractionPipeline):
         # intervent in the negative and positive direction
         with torch.no_grad():
             with TraceDict(
-                self.model, layers_names, detach=True, edit_output=edit_fn_pos
+                self.model, layers_names, detach=True, edit_output=edit_fn
             ) as ret:
                 outputs_pos = transform_model_output(self.model(**model_in))
                 
-            with TraceDict(
-                self.model, layers_names, detach=True, edit_output=edit_fn_neu
-            ) as ret:
-                outputs_neg = transform_model_output(self.model(**model_in))
+            outputs_neg = transform_model_output(self.model(**model_in))
                 
         # stack the outputs
         o = {k: torch.stack([outputs_neg[k], outputs_pos[k]], -1) for k in outputs_neg.keys()}

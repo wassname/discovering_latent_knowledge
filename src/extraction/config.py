@@ -65,7 +65,7 @@ class ExtractConfig(Serializable):
     disable_ds_cache: bool = False
     """Disable huggingface datasets cache."""
 
-    intervention_direction_method: str = "cluster_mean"
+    intervention_direction_method: str = "mm"
     """"how to intervent: pca, cluster_mean, random"""
 
     intervention_fit_examples: int = 200

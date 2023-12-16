@@ -13,48 +13,49 @@ from src.config import root_folder
 from src.prompts.prompt_loading import load_preproc_dataset
 from transformers import AutoTokenizer, pipeline, Pipeline
 from loguru import logger
-from src.repe.rep_readers import project_onto_direction
+from jaxtyping import Float
+from torch import nn, Tensor
 
-Activations = NewType("Activations", Dict[str, torch.Tensor])
+# Activations = NewType("Activations", Dict[str, torch.Tensor])
 
-InterventionDict = NewType(
-    "InterventionDict", Dict[str, List[Tuple[np.ndarray, float]]]
-)
-
-
-def intervene(output, activation):
-    # TODO need attention mask
-    assert (
-        output.ndim == 3
-    ), f"expected output to be (batch, seq, vocab), got {output.shape}"
-    # assert torch.isfinite(output).all(), 'model output nan'
-    output2 = output + activation.to(output.device)[None, :]
-
-    output2 = project_onto_direction(output, activation)
-    # assert torch.isfinite(output2).all(), 'intervention lead to nan'
-    return output2
+# InterventionDict = NewType(
+#     "InterventionDict", Dict[str, List[Tuple[np.ndarray, float]]]
+# )
 
 
-def intervention_meta_fn2(
-    outputs: torch.Tensor, layer_name: str, activations: Activations
-) -> torch.Tensor:
-    """see
-    - honest_llama: https://github.com/likenneth/honest_llama/blob/e010f82bfbeaa4326cef8493b0dd5b8b14c6da67/validation/validate_2fold.py#L114
-    - baukit: https://github.com/davidbau/baukit/blob/main/baukit/nethook.py#L42C1-L45C56
+# def intervene(output, activation):
+#     # TODO need attention mask
+#     assert (
+#         output.ndim == 3
+#     ), f"expected output to be (batch, seq, vocab), got {output.shape}"
+#     # assert torch.isfinite(output).all(), 'model output nan'
+#     output2 = output + activation.to(output.device)[None, :]
 
-    Usage:
-        edit_output = partial(intervention_meta_fn2, activations=activations)
-        with TraceDict(model, layers_to_intervene, edit_output=edit_output) as ret:
-            ...
-    """
-    if type(outputs) is tuple:
-        # just edit the first one, and put it back in the tuple
-        output0 = intervene(outputs[0], activations[layer_name])
-        return (output0, *outputs[1:])
-    elif type(outputs) is torch.Tensor:
-        return intervene(outputs, activations[layer_name])
-    else:
-        raise ValueError(f"outputs must be tuple or tensor, got {type(outputs)}")
+#     output2 = project_onto_direction(output, activation)
+#     # assert torch.isfinite(output2).all(), 'intervention lead to nan'
+#     return output2
+
+
+# def intervention_meta_fn2(
+#     outputs: torch.Tensor, layer_name: str, activations: Activations
+# ) -> torch.Tensor:
+#     """see
+#     - honest_llama: https://github.com/likenneth/honest_llama/blob/e010f82bfbeaa4326cef8493b0dd5b8b14c6da67/validation/validate_2fold.py#L114
+#     - baukit: https://github.com/davidbau/baukit/blob/main/baukit/nethook.py#L42C1-L45C56
+
+#     Usage:
+#         edit_output = partial(intervention_meta_fn2, activations=activations)
+#         with TraceDict(model, layers_to_intervene, edit_output=edit_output) as ret:
+#             ...
+#     """
+#     if type(outputs) is tuple:
+#         # just edit the first one, and put it back in the tuple
+#         output0 = intervene(outputs[0], activations[layer_name])
+#         return (output0, *outputs[1:])
+#     elif type(outputs) is torch.Tensor:
+#         return intervene(outputs, activations[layer_name])
+#     else:
+#         raise ValueError(f"outputs must be tuple or tensor, got {type(outputs)}")
 
 
 def create_cache_interventions(
@@ -113,7 +114,7 @@ def create_cache_interventions(
             train_labels = train_labels == 0
 
         rep_reading_pipeline = pipeline("rep-reading", model=model, tokenizer=tokenizer)
-        honesty_rep_reader = rep_reading_pipeline.get_directions(
+        intervention = rep_reading_pipeline.get_directions(
             dataset_fit["question"],
             rep_token=rep_token,
             hidden_layers=hidden_layers,
@@ -121,28 +122,29 @@ def create_cache_interventions(
             train_labels=dataset_fit["label_true"],
             direction_method=direction_method,
             batch_size=batch_size,
+            layer_name_tmpl=cfg.intervention_layer_name_template,
             **tokenizer_args,
         )
 
         assert np.isfinite(
-            np.concatenate(list(honesty_rep_reader.directions.values()))
+            np.concatenate(list(intervention.direction.values()))
         ).all()
         # assert torch.isfinite(torch.concat(list(honesty_rep_reader.directions.values()))).all()
         # and save
         with open(intervention_f, "wb") as f:
-            pickle.dump(honesty_rep_reader, f)
+            pickle.dump(intervention, f)
             logger.info(f"Saved interventions to {intervention_f}")
 
     with open(intervention_f, "rb") as f:
-        honesty_rep_reader = pickle.load(f)
+        intervention = pickle.load(f)
     logger.info(f"Loaded interventions from {intervention_f}")
 
-    return honesty_rep_reader
+    return intervention
 
 
 
 def test_intervention_quality(
-    dataset_train, activations, model, rep_control_pipeline2, batch_size=2, ds_name=""
+    dataset_train, intervention, model, rep_control_pipeline2, batch_size=2, ds_name=""
 ):
     """
     Check interventions are ordered and different and valid
@@ -155,7 +157,7 @@ def test_intervention_quality(
         batch = inputs[batch_index * batch_size : (batch_index + 1) * batch_size]
         with torch.no_grad():
             baseline_outputs += rep_control_pipeline2(
-                batch, batch_size=batch_size, activations=activations
+                batch, batch_size=batch_size, intervention=intervention
             )
 
     # So here we check that the interventions are ordered, e.g. the positive one gives a more true answer than the neutral or negative ones
@@ -205,24 +207,22 @@ def test_intervention_quality(
     return df
 
 
-def get_activations_from_reader(
-    honesty_rep_reader: Pipeline, hidden_layers: list, coeff=1, dtype=None, device=None
-) -> Dict[str, float]:
-    """Get activations from the honesty_rep_reader"""
+# def get_activations_from_reader(
+#     honesty_rep_reader: Pipeline, hidden_layers: list, coeff=1, dtype=None, device=None
+# ) -> Dict[str, float]:
+#     """Get activations from the honesty_rep_reader"""
 
-    # FIXME: coeff is a magic number. The representation_engineering repo used 8, but it seems to vary by model?
+#     activations = {}
+#     for layer in hidden_layers:
+#         activations[layer] = torch.tensor(
+#             coeff
+#             * honesty_rep_reader.directions[layer]
+#             * honesty_rep_reader.direction_signs[layer]
+#         )
+#         if device:
+#             activations[layer] = activations[layer].to(device)
+#         if dtype:
+#             activations[layer] = activations[layer].to(dtype)
 
-    activations = {}
-    for layer in hidden_layers:
-        activations[layer] = torch.tensor(
-            coeff
-            * honesty_rep_reader.directions[layer]
-            * honesty_rep_reader.direction_signs[layer]
-        )
-        if device:
-            activations[layer] = activations[layer].to(device)
-        if dtype:
-            activations[layer] = activations[layer].to(dtype)
-
-    assert torch.isfinite(torch.concat(list(activations.values()))).all()
-    return activations
+#     assert torch.isfinite(torch.concat(list(activations.values()))).all()
+#     return activations

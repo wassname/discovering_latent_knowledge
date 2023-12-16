@@ -2169,7 +2169,7 @@ best to use a class.... and pass it around... doesn't need to be a pipeline
 but none of them seem to have a reasonable magnitude so.... not sure if any will give valid ones
 
 
-```sh
+~~~sh
 export ORIGINAL_ORG=TheBloke
 export NEW_ORG=wassname
 export MODEL_NAME=phi-2-GPTQ
@@ -2184,7 +2184,9 @@ git remote add upstream https://huggingface.co/$ORIGINAL_ORG/$MODEL_NAME
 git fetch upstream
 git rebase upstream/main
 git push --force-with-lease
-```
+~~~
+
+
 ok I wasn't even applying the activation right? I was adding, mean to multiply...
 
 Definitly time to simplify
@@ -2195,7 +2197,7 @@ plan
 - src.datasets.intervene  create_cache_interventions
 
 
-# Phi-2
+## Phi-2 scratch 2023-12-16 12:43:50
 
 model = AutoModelForCausalLM.from_pretrained(ckpt_path, torch_dtype=torch.float16, flash_attn=True, flash_rotary=True, fused_dense=True)
 
@@ -2207,3 +2209,36 @@ maybe for padding use 50256? Rather than 0?
     "transformers_version": "4.37.0.dev0",
 
 
+```py
+com_directions = get_com_directions(num_layers, num_heads, train_set_idxs, val_set_idxs, separated_head_wise_activations, separated_labels)
+direction = com_directions[layer_head_to_flattened_idx(layer, head, num_heads)]
+direction = direction / np.linalg.norm(direction)
+
+interventions = {}
+activations = tuning_activations[:,layer,head,:] # batch x 128
+proj_vals = activations @ direction.T
+proj_val_std = np.std(proj_vals)
+interventions[f"model.layers.{layer}.self_attn.head_out"].append((head, direction.squeeze(), proj_val_std))
+
+head_output[:, -1, head, :] += args.alpha * proj_val_std * direction_to_add
+```
+
+
+Oh wait the actual intervention in geometry of truth is 
+
+```
+direction = direction / direction.norm()
+diff = (true_mean - false_mean) @ direction
+direction = diff * direction
+
+# wtf
+output[0][:, intervention_idx, :] += direction * alpha
+```
+
+# 2023-12-16 16:50:20
+
+OK I would like a sklearn like interface
+
+```py
+class Intervention(nn.Module):
+  def _

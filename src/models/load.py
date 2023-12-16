@@ -58,8 +58,11 @@ def load_model(model_repo =  "microsoft/phi-2", pad_token_id=0) -> Tuple[AutoMod
     model = AutoModelForCausalLM.from_pretrained(model_repo, config=config, 
                                                  **model_options)
     
-    # from auto_gptq import exllama_set_max_input_length
-    # model = exllama_set_max_input_length(model, max_input_length=5000)
+    try:
+        from auto_gptq import exllama_set_max_input_length
+        model = exllama_set_max_input_length(model, max_input_length=5000)
+    except Exception as e:
+        logger.exception("could not set exllama max input length")
 
     return model, tokenizer
 
