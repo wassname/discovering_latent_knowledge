@@ -53,11 +53,10 @@ def choice2id(tokenizer, c: str, whitespace_first=False) -> List[int]:
     ids2 += tokenizer(f'{c}', add_special_tokens=False)["input_ids"]
     ids = list(set(ids2))
     
-    print(ids2)
-    print(ids)
-    print([f'`{t}`' for t in tokenizer.batch_decode(ids, skip_special_tokens=True)])
-    print([c.strip().startswith(tokenizer.decode(i)) for i in ids])
-
+    # print(ids2)
+    # print(ids)
+    # print([f'`{t}`' for t in tokenizer.batch_decode(ids, skip_special_tokens=True)])
+    # print([c.strip().startswith(tokenizer.decode(i)) for i in ids])
 
     # only include ones that decode to our original
     ids = [i for i in ids if c.strip().startswith(tokenizer.decode(i).strip()) and len(tokenizer.decode(i).strip())]

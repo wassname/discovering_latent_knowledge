@@ -2100,6 +2100,8 @@ TODO:
 - [ ] maybe I can use my intervention as an importance matrix for the VAE loss?
 - [ ] maybe I can do that codebook VAE? How big?
 
+Wait I'm calibrating on the positive vs negative.... so yes my intervention will flip it. But it's not on truth or lie or deception!
+
 OK I can't load all my hs into mem, that's not ideal....
 
 and I tried the mean diff intervention since eluther like it, but the truthfull llama one seems broken
@@ -2183,7 +2185,14 @@ git fetch upstream
 git rebase upstream/main
 git push --force-with-lease
 ```
+ok I wasn't even applying the activation right? I was adding, mean to multiply...
 
+Definitly time to simplify
+plan
+- So delete rep_readers
+- intervention_meta_fn2
+- activations
+- src.datasets.intervene  create_cache_interventions
 
 
 # Phi-2
@@ -2196,3 +2205,5 @@ maybe for padding use 50256? Rather than 0?
 
 "torch_dtype": "float16",
     "transformers_version": "4.37.0.dev0",
+
+

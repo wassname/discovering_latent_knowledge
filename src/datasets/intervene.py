@@ -13,6 +13,7 @@ from src.config import root_folder
 from src.prompts.prompt_loading import load_preproc_dataset
 from transformers import AutoTokenizer, pipeline, Pipeline
 from loguru import logger
+from src.repe.rep_readers import project_onto_direction
 
 Activations = NewType("Activations", Dict[str, torch.Tensor])
 
@@ -28,6 +29,8 @@ def intervene(output, activation):
     ), f"expected output to be (batch, seq, vocab), got {output.shape}"
     # assert torch.isfinite(output).all(), 'model output nan'
     output2 = output + activation.to(output.device)[None, :]
+
+    output2 = project_onto_direction(output, activation)
     # assert torch.isfinite(output2).all(), 'intervention lead to nan'
     return output2
 

@@ -3,13 +3,16 @@ from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 import numpy as np
 from itertools import islice
+import torch
 
 ### Util Functions ###
 def project_onto_direction(H, direction):
     """Project matrix H (n, d_1) onto direction vector (d_2,)"""
     # TODO: should we require direction vectors to be unit vectors? then return H.dot(direction)
-    mag = np.linalg.norm(direction)
-    assert not np.isinf(mag)
+    direction = direction.to(H.device).squeeze(0)
+    mag = torch.linalg.norm(direction).to(H.device)
+    assert torch.isfinite(mag)
+    return (H[0] @ direction[:, None] # check that the dimensions match
     return H.dot(direction) / mag
 
 def recenter_mean(x, mean=None):
