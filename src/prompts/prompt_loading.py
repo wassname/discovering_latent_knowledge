@@ -361,8 +361,9 @@ def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int
     
     b4 = ds_tokens.num_rows
     # print('num_rows', ds_tokens.num_rows)
+    print(f"median token length: {np.median(ds_tokens['length'])} for {ds_name}. max_length={max_length}")
+    # print(np.histogram(ds_tokens['length']))
     truncation_rate = np.mean(ds_tokens['truncated'])
-    print(np.histogram(ds_tokens['length']))
     assert truncation_rate<0.5, f"truncation rate is too high {truncation_rate}. Try a longer max_length than {max_length}"
     logger.info(f"truncation rate: {truncation_rate} on {ds_name}")
     ds_tokens = ds_tokens.filter(lambda r: r["truncated"] == False)

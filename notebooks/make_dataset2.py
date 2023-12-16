@@ -77,7 +77,7 @@ print(cfg)
 
 batch_size = cfg.batch_size
 
-model, tokenizer = load_model(cfg.model)
+model, tokenizer = load_model(cfg.model, pad_token_id=cfg.pad_token_id)
 
 
 tokenizer_args = dict(

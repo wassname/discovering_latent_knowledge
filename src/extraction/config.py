@@ -15,12 +15,17 @@ class ExtractConfig(Serializable):
     # model: str = "TheBloke/Mistral-7B-Instruct-v0.1-GPTQ" # it wont lie? wtf
     # model: str = "microsoft/phi-2"
     # model: str = "microsoft/phi-2"
-    model: str = "/media/wassname/SGIronWolf/projects5/elk/phi-2"
+    # model: str = "/media/wassname/SGIronWolf/projects5/elk/phi-2"
+    # model: str = "TheBloke/phi-2-GPTQ"
+    model: str = "wassname/phi-2-GPTQ_w_hidden_states"
     
     # model: str = "TheBloke/Llama-2-13B-chat-GPTQ"
     """HF model string identifying the language model to extract hidden states from."""
 
     batch_size: int = 5
+
+    pad_token_id: int = 50256
+    """Token ID to use for padding, most often zero."""
 
     prompt_format: str | None = 'phi'
     """if the tokenizer does not have a chat template you can set a custom one. see src/prompts/templates/prompt_formats/readme.md."""

@@ -2151,4 +2151,48 @@ In particular our intervention result in junk.... so no wonder there is nothing 
 # Invervention choices direction and magnitude
 
 https://github.com/saprmarks/geometry-of-truth/blob/91b223224699754efe83bbd3cae04d434dda0760/probes.py#L53
-- 
+geometry of truth
+- uses covariance (in some modes)
+- sigmoid(x @ direction) (in other modes)
+
+honest llama
+- uses std of layer vals
+
+a cleaner way?
+
+we need an intervention function
+we need to fit a intervention
+best to use a class.... and pass it around... doesn't need to be a pipeline
+
+but none of them seem to have a reasonable magnitude so.... not sure if any will give valid ones
+
+
+```sh
+export ORIGINAL_ORG=TheBloke
+export NEW_ORG=wassname
+export MODEL_NAME=phi-2-GPTQ
+export NEW_MODEL_NAME=phi-2-GPTQ_w_hidden_states
+# MODEL_NAME=phi-2-GPTQ-hidden_states
+# huggingface-cli login
+huggingface-cli repo create ${NEW_MODEL_NAME} --organization ${NEW_ORG}
+git lfs install --skip-smudge
+git clone https://huggingface.co/$NEW_ORG/$NEW_MODEL_NAME
+cd $NEW_MODEL_NAME
+git remote add upstream https://huggingface.co/$ORIGINAL_ORG/$MODEL_NAME
+git fetch upstream
+git rebase upstream/main
+git push --force-with-lease
+```
+
+
+
+# Phi-2
+
+model = AutoModelForCausalLM.from_pretrained(ckpt_path, torch_dtype=torch.float16, flash_attn=True, flash_rotary=True, fused_dense=True)
+
+I made a version which is quantised and returns hidden states
+
+maybe for padding use 50256? Rather than 0?
+
+"torch_dtype": "float16",
+    "transformers_version": "4.37.0.dev0",
