@@ -117,7 +117,7 @@ def load_prompts(
     num_templates = len(prompter.templates)
     assert num_templates > 0
     if rank == 0:
-        print(f"Extracting {num_templates} variants of each prompt")
+        logger.info(f"Extracting {num_templates} variants of each prompt")
 
     label_column = prompter.label_column or infer_label_column(ds.features)
 
@@ -131,7 +131,7 @@ def load_prompts(
         # This is shockingly fast since it uses an optimized Apache Arrow primitive.
         label_choices = sorted(ds.unique(label_column))
         if rank == 0:
-            print(f"Using the following pseudo-labels: {label_choices}")
+            logger.info(f"Using the following pseudo-labels: {label_choices}")
 
     rng = Random(seed)
     if num_shots > 0:
@@ -156,7 +156,7 @@ def load_prompts(
         )
     else:
         if rank == 0:
-            print("No label column found, not balancing")
+            logger.info("No label column found, not balancing")
         ds = ds.to_iterable_dataset()
 
     j = 0
@@ -361,11 +361,11 @@ def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int
     
     b4 = ds_tokens.num_rows
     # print('num_rows', ds_tokens.num_rows)
-    print(f"median token length: {np.median(ds_tokens['length'])} for {ds_name}. max_length={max_length}")
+    logger.info(f"median token length: {np.median(ds_tokens['length'])} for {ds_name}. max_length={max_length}")
     # print(np.histogram(ds_tokens['length']))
     truncation_rate = np.mean(ds_tokens['truncated'])
     assert truncation_rate<0.5, f"truncation rate is too high {truncation_rate}. Try a longer max_length than {max_length}"
-    logger.info(f"truncation rate: {truncation_rate} on {ds_name}")
+    logger.info(f"truncation rate: {truncation_rate:2.2%} on {ds_name}")
     ds_tokens = ds_tokens.filter(lambda r: r["truncated"] == False)
 
     # print('num_rows', ds_tokens.num_rows)
@@ -374,7 +374,7 @@ def load_preproc_dataset(ds_name: str, tokenizer: PreTrainedTokenizerBase, N:int
     
     # ## Filter out truncated examples
     ds_tokens = ds_tokens.filter(lambda r: not r['truncated'])
-    print(f'num_rows (after filtering out truncated rows) {b4}=>{ds_tokens.num_rows}')
+    logger.info(f'num_rows (after filtering out truncated rows) {b4}=>{ds_tokens.num_rows}')
     assert len(ds_tokens), f'No examples left after filtering out truncated rows, try a longer max_length than {max_length}'
     assert len(ds_tokens)>=N, f'Few {len(ds_tokens)}<{N} examples left after filtering out truncated rows, try a longer max_length than {max_length}'
     if len(ds_tokens)>N:
