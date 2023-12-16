@@ -58,11 +58,11 @@ def create_cache_interventions(
     model,
     tokenizer,
     cfg,
-    N_fit_examples=20,
-    batch_size=2,
+    # N_fit_examples=20,
+    # batch_size=2,
     rep_token=-1,
     n_difference=1,
-    direction_method="pca",
+    # direction_method="pca",
     get_negative=False,
 ):
     """
@@ -70,6 +70,9 @@ def create_cache_interventions(
 
     So we always load a cached version if possible. to make it approx repeatable use the same dataset etc
     """
+    direction_method=cfg.intervention_direction_method
+    N_fit_examples=cfg.intervention_fit_examples
+    batch_size=cfg.batch_size
     tokenizer_args = dict(
         padding="max_length",
         max_length=cfg.max_length,
