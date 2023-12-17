@@ -143,8 +143,6 @@ rep_control_pipeline2
 from src.datasets.intervene import test_intervention_quality
 
 
-
-
 # %%
 # test intervention quality
 # TODO perhaps move this to intervention create/load/cache
@@ -252,16 +250,24 @@ for ds_name in cfg.datasets:
     assert cfg.intervention_fit_examples < N_train
     N_train_split = N_train - cfg.intervention_fit_examples
 
-
     # split the dataset, it's preshuffled
     dataset_fit = ds_tokens.select(range(cfg.intervention_fit_examples))
-    dataset_train = ds_tokens.select(range(cfg.intervention_fit_examples, N_train_split))
+    dataset_train = ds_tokens.select(
+        range(cfg.intervention_fit_examples, N_train_split)
+    )
     dataset_test = ds_tokens.select(range(N_train_split, len(ds_tokens)))
     assert len(dataset_train) > 3, f"dataset_train is too small {len(dataset_train)}"
     assert len(dataset_test) > 3
 
     # FIXME:
-    test_intervention_quality(dataset_train, intervention, model, rep_control_pipeline2, batch_size=batch_size, ds_name=ds_name)
+    test_intervention_quality(
+        dataset_train,
+        intervention,
+        model,
+        rep_control_pipeline2,
+        batch_size=batch_size,
+        ds_name=ds_name,
+    )
 
     ds1, f = create_hs_ds(
         ds_name,

@@ -2253,5 +2253,20 @@ Some haven't worked along:
 - ranking (maybe because dropout doesnt give enougth variation? or the variation is useless), it needs intervention, but intervention might work on it's own. And then all ranking does it possibly help avoid overfitting!
 - intervention... it's hard to find a good one. It's either too little to matter or too much and the model is incoherent, meaning it's a implausible intervention. Plus all my interventions so far have been for the word true, not true or deception. 
   - [ ] Try doing MMProbe with deception vs truth?
+  - [ ] Try is residual not hidden...
   - [ ] Try SGD only on bias! trying to flip the probabilities on a large batch (can use grad accum)
-- SAE... no one has solved this. Maybe with an important matrix (which can come from an intervention)
+- SAE... no one has solved this. 
+  - [ ] Maybe with an important matrix (which can come from an intervention)
+
+
+also read a few
+- ognitive Dissonance: Why Do Language Model Outputs  https://arxiv.org/abs/2312.03729
+- https://lilianweng.github.io/posts/2018-08-12-vae/#vq-vae-and-vq-vae-2
+- geometry of truth https://arxiv.org/abs/2310.06824
+- openai weak to strong generalization
+
+
+Prioritise small experiments in notebooks
+- take all the recorded hidden states and seperate into truth and deception
+- try a normal intervention and test it
+- try novel sgb bias intervention

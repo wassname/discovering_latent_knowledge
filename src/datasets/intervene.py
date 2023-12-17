@@ -16,47 +16,6 @@ from loguru import logger
 from jaxtyping import Float
 from torch import nn, Tensor
 
-# Activations = NewType("Activations", Dict[str, torch.Tensor])
-
-# InterventionDict = NewType(
-#     "InterventionDict", Dict[str, List[Tuple[np.ndarray, float]]]
-# )
-
-
-# def intervene(output, activation):
-#     # TODO need attention mask
-#     assert (
-#         output.ndim == 3
-#     ), f"expected output to be (batch, seq, vocab), got {output.shape}"
-#     # assert torch.isfinite(output).all(), 'model output nan'
-#     output2 = output + activation.to(output.device)[None, :]
-
-#     output2 = project_onto_direction(output, activation)
-#     # assert torch.isfinite(output2).all(), 'intervention lead to nan'
-#     return output2
-
-
-# def intervention_meta_fn2(
-#     outputs: torch.Tensor, layer_name: str, activations: Activations
-# ) -> torch.Tensor:
-#     """see
-#     - honest_llama: https://github.com/likenneth/honest_llama/blob/e010f82bfbeaa4326cef8493b0dd5b8b14c6da67/validation/validate_2fold.py#L114
-#     - baukit: https://github.com/davidbau/baukit/blob/main/baukit/nethook.py#L42C1-L45C56
-
-#     Usage:
-#         edit_output = partial(intervention_meta_fn2, activations=activations)
-#         with TraceDict(model, layers_to_intervene, edit_output=edit_output) as ret:
-#             ...
-#     """
-#     if type(outputs) is tuple:
-#         # just edit the first one, and put it back in the tuple
-#         output0 = intervene(outputs[0], activations[layer_name])
-#         return (output0, *outputs[1:])
-#     elif type(outputs) is torch.Tensor:
-#         return intervene(outputs, activations[layer_name])
-#     else:
-#         raise ValueError(f"outputs must be tuple or tensor, got {type(outputs)}")
-
 
 def create_cache_interventions(
     model,
@@ -74,9 +33,9 @@ def create_cache_interventions(
 
     So we always load a cached version if possible. to make it approx repeatable use the same dataset etc
     """
-    direction_method=cfg.intervention_direction_method
-    N_fit_examples=cfg.intervention_fit_examples
-    batch_size=cfg.batch_size
+    direction_method = cfg.intervention_direction_method
+    N_fit_examples = cfg.intervention_fit_examples
+    batch_size = cfg.batch_size
     tokenizer_args = dict(
         padding="max_length",
         max_length=cfg.max_length,
@@ -126,9 +85,7 @@ def create_cache_interventions(
             **tokenizer_args,
         )
 
-        assert np.isfinite(
-            np.concatenate(list(intervention.direction.values()))
-        ).all()
+        assert np.isfinite(np.concatenate(list(intervention.direction.values()))).all()
         # assert torch.isfinite(torch.concat(list(honesty_rep_reader.directions.values()))).all()
         # and save
         with open(intervention_f, "wb") as f:
@@ -142,7 +99,6 @@ def create_cache_interventions(
     return intervention
 
 
-
 def test_intervention_quality(
     dataset_train, intervention, model, rep_control_pipeline2, batch_size=2, ds_name=""
 ):
@@ -150,7 +106,7 @@ def test_intervention_quality(
     Check interventions are ordered and different and valid
     """
     # TODO over multiple batches?
-    inputs = dataset_train#[:batch_size]
+    inputs = dataset_train  # [:batch_size]
     model.eval()
     baseline_outputs = []
     for batch_index in range(len(inputs) // batch_size):
@@ -176,7 +132,7 @@ def test_intervention_quality(
 
         # TODO coverage too
         # mean_prob = np.sum(r['choice_probs'], 1).mean()
-        coverage.append(torch.sum(r['choice_probs'], 1))
+        coverage.append(torch.sum(r["choice_probs"], 1))
 
         choice_true = choices[label]
         if label == 0:
@@ -191,11 +147,11 @@ def test_intervention_quality(
                 label=label,
             )
         )
-        if bi<5:
+        if bi < 5:
             print(f"\t Score: {list(ans)} of true ans `{choice_true}`=={label}")
             print(f"\t Ordered? {ordered} {np.argsort(ans)}")
             print(f"\t Different? {abs(np.diff(ans))>0.1} {np.diff(ans)}")
-            print("'\t top choices", r['text_ans'], 'should be valid')
+            print("'\t top choices", r["text_ans"], "should be valid")
     df = pd.DataFrame(data)
     print(f"N={len(df)}")
     print(f"rows that are ordered {df['order'].mean():%}")
@@ -207,22 +163,62 @@ def test_intervention_quality(
     return df
 
 
-# def get_activations_from_reader(
-#     honesty_rep_reader: Pipeline, hidden_layers: list, coeff=1, dtype=None, device=None
-# ) -> Dict[str, float]:
-#     """Get activations from the honesty_rep_reader"""
+from IPython.display import display, HTML
 
-#     activations = {}
-#     for layer in hidden_layers:
-#         activations[layer] = torch.tensor(
-#             coeff
-#             * honesty_rep_reader.directions[layer]
-#             * honesty_rep_reader.direction_signs[layer]
-#         )
-#         if device:
-#             activations[layer] = activations[layer].to(device)
-#         if dtype:
-#             activations[layer] = activations[layer].to(dtype)
 
-#     assert torch.isfinite(torch.concat(list(activations.values()))).all()
-#     return activations
+def top_toke_probs(
+    o,
+    tokenizer,
+    N=20,
+):
+    """
+        nicely return top token probabilities e.g.
+
+            prob_0	tokens_0	id_0	prob_1	tokens_1	id_1
+    0	0.811495	`Neg`	32863	0.666955	`Neg`	32863
+    1	0.113310	`Pos`	21604	0.194095	`Pos`	21604
+    2	0.020635	`Ne`	8199	0.065014	`Ne`	8199
+    """
+    data = {}
+    for i in range(o["end_logits"].shape[1]):
+        probs = torch.softmax(o["end_logits"][:, i], -1)
+        top = probs.argsort(0, descending=True)
+        top_probs = probs[top]
+        tokens_top20 = tokenizer.batch_decode(
+            top[:N], skip_special_tokens=False, clean_up_tokenization_spaces=False
+        )
+        tokens_top20 = [f"`{t}`" for t in tokens_top20]
+        data.update(
+            {
+                f"prob_{i}": top_probs[:N],
+                f"tokens_{i}": tokens_top20,
+                f"id_{i}": top[:N],
+            }
+        )
+    return pd.DataFrame(data)
+
+
+def print_pipeline_row(o: dict, tokenizer):
+    """take in single pipeline output, and prince intervention metrics."""
+    choices = [tokenizer.batch_decode(cc) for cc in o["choice_ids"]]
+    index = [o[0] for o in choices]
+    d = pd.DataFrame(
+        o["choice_probs"].numpy(), columns=["edit=None", "edit=+"], index=index
+    ).T
+    # d["top1 coverage"] = d.sum(1)
+    mean_prob = o["choice_probs"].sum(0)
+    d["coverage"] = mean_prob
+
+    print("choices", choices)
+    max_prob, max_token = torch.softmax(o["end_logits"][:, :], 0).max(0)
+    max_detoken = tokenizer.batch_decode(max_token)
+    d["top_token"] = max_detoken
+    d["top_prob"] = max_prob
+    d["label_true"] = o["label_true"]
+    d["label_instructed"] = o["label_instructed"]
+    print("choice probs")
+    display(d)
+
+    d1 = top_toke_probs(o, tokenizer)
+    print("top token probs")
+    display(d1)
