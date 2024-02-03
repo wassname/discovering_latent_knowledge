@@ -2,9 +2,14 @@ My own experiments with DLK
 
 - [x] use pytorch lightning
 - [x] batch hidden states 5x faster
-- [ ] use llama 13B, to see if larger models give better results
-- [ ] eval on some deceptive or misleading statements
-- [ ] debug by looking at model output
+- [x] use llama 13B, to see if larger models give better results
+- [x] eval on some deceptive or misleading statements
+- [x] debug by looking at model output
+- [x] try ranking hidden state (on a branch)
+- [x] try a tokenized autoencoder (on a branch)
+- [x] try a sparse autoencoder (on a branch)
+
+I'm afraid none of these approaches have got the >90% out of distribution results I hope for. I beleive this to be because current models are too small to have internals that reliably produce deception.      
 
 -------------
 
