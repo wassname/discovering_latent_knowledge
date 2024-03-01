@@ -1,15 +1,19 @@
-My own experiments with DLK
+Experiments Conducted in Discovering Latent Knowledge:
 
-- [x] use pytorch lightning
-- [x] batch hidden states 5x faster
-- [x] use llama 13B, to see if larger models give better results
-- [x] eval on some deceptive or misleading statements
-- [x] debug by looking at model output
-- [x] try ranking hidden state (on a branch)
-- [x] try a tokenized autoencoder (on a branch)
-- [x] try a sparse autoencoder (on a branch)
+- Implemented PyTorch Lightning
+- Batched hidden states for 5x speed improvement
+- Utilized llama 13B to investigate if larger models yield better results
+- Evaluated on various deceptive or misleading statements
+- Debugged by examining model output
+- Tested ranking of hidden state (on a separate branch)
+- Experimented with a tokenized autoencoder (on a different branch)
+- Explored a sparse autoencoder (on another branch)
 
-I'm afraid none of these approaches have got the >90% out of distribution results I hope for. I beleive this to be because current models are too small to have internals that reliably produce deception.      
+Unfortunately, none of these approaches have achieved the desired >90% out-of-distribution results. The current hypothesis is that existing models are too small to possess internal structures that can reliably detect deception.     
+
+See some similar experiments in:
+- the branches of this repository
+- Another repository whhere I used LoRA as in intervention https://github.com/wassname/LoRA_are_lie_detectors
 
 -------------
 
